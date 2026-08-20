@@ -107,6 +107,33 @@ All notable changes to Phantom are documented here. Format follows
   operators can confirm the master-key generation their binary was
   built against without exposing key material.
 
+### Changed — Sprint 16: detector ensemble + process hardening
+- **Anti-debugger detection is an ensemble now.** `full_self_check()`
+  returns a `DetectionVerdict { all_clear, triggered }` listing every
+  detector that fired. Patching out one detector no longer disables
+  the whole check.
+  - Linux: `tracer_pid` (`/proc/self/status`), `ld_preload`
+    (environment shim/interposition), `debugger_env`
+    (`LD_AUDIT`, `MALLOC_TRACE`, `GDB_PYTHON`, `FRIDA_AGENT`,
+    `PIN_INSTRUMENT`, ...)
+  - Windows: `is_debugger_present`, `check_remote_debugger`
+- **Integrity fanout.** `LicenseGuard::check_layer()` and
+  `check_service()` now re-run `self_check()` on every call.
+  A partial patch that silences `activate()` no longer opens the
+  gate for Pro/Enterprise-only operations.
+- **Process hardening at startup.** `phantom_license::integrity::
+  harden_process()` runs from `phantom-cli` and `phantom-svc`
+  `main()`. On Linux: `prctl(PR_SET_DUMPABLE, 0)` — no core dumps
+  (closes the "crash the tool, grep the dump for the master key"
+  attack) and blocks foreign-UID ptrace. No-op on Windows for now.
+- `phantom self-check` output (text + JSON) now names the detectors
+  that fired, not just a boolean.
+
+### Added
+- `PHANTOM_DISABLE_INTEGRITY` env var: bypasses the detector ensemble
+  for operator debugging. Documented but not advertised — production
+  users have no reason to set it.
+
 ## [0.5.0] — Sprint 10
 
 ### Added

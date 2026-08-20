@@ -195,6 +195,13 @@ impl LicenseGuard {
     }
 
     pub fn check_layer(&self, layer: u8) -> Result<(), LicenseError> {
+        // Fanout callsite: any pre-flight gate on privileged operations
+        // re-runs the debugger ensemble. Patching just LicenseGuard::
+        // activate() out is not enough — an attacker also has to
+        // silence every gate.
+        if !integrity::self_check() {
+            return Err(LicenseError::InvalidSignature);
+        }
         if self.tier.allows_layer(layer) {
             Ok(())
         } else {
@@ -211,6 +218,11 @@ impl LicenseGuard {
     }
 
     pub fn check_service(&self) -> Result<(), LicenseError> {
+        // Same rationale as `check_layer`: service-mode is a paid-
+        // tier operation and the gate re-runs detection.
+        if !integrity::self_check() {
+            return Err(LicenseError::InvalidSignature);
+        }
         if self.tier.allows_service() {
             Ok(())
         } else {

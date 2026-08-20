@@ -6,6 +6,11 @@ mod state;
 use std::env;
 
 fn main() {
+    // Harden this process before doing anything else. On Linux this
+    // disables core dumps (PR_SET_DUMPABLE=0) so a crash cannot spill
+    // the master key onto disk. No-op on Windows for now.
+    phantom_license::integrity::harden_process();
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 {

@@ -127,6 +127,12 @@ enum ProfileAction {
 }
 
 fn main() {
+    // Harden this process before we do anything else. On Linux this
+    // disables core dumps and blocks foreign-UID ptrace via
+    // PR_SET_DUMPABLE=0 — closing the "core-dump the process and
+    // grep for the master key" attack. No-op on Windows for now.
+    phantom_license::integrity::harden_process();
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -833,7 +839,7 @@ fn main() {
         }
 
         Commands::SelfCheck => {
-            let debugger = phantom_license::integrity::detect_debugger();
+            let detect = phantom_license::integrity::full_self_check();
             let data_dir = profile::data_dir();
 
             // Time anchor: 'ok' or 'rewound' or 'first-time'
@@ -852,14 +858,15 @@ fn main() {
 
             let cooldown = phantom_license::rate_limit::required_cooldown_secs(&data_dir);
 
-            let healthy = !debugger && anchor_str != "rewound" && license_state_ok;
+            let healthy = detect.all_clear && anchor_str != "rewound" && license_state_ok;
 
             if cli.json {
                 Envelope::ok(
                     "self-check",
                     SelfCheckPayload {
                         healthy,
-                        debugger_detected: debugger,
+                        debugger_detected: !detect.all_clear,
+                        debugger_detectors_triggered: detect.triggered.clone(),
                         time_anchor: anchor_str,
                         license_state_verified: license_state_ok,
                         activation_cooldown_secs: cooldown,
@@ -879,10 +886,14 @@ fn main() {
                     "  Overall:            {}",
                     if healthy { "HEALTHY" } else { "DEGRADED" }
                 );
-                println!(
-                    "  Debugger detected:  {}",
-                    if debugger { "YES (!)" } else { "no" }
-                );
+                if detect.all_clear {
+                    println!("  Debugger detected:  no");
+                } else {
+                    println!(
+                        "  Debugger detected:  YES (triggered: {})",
+                        detect.triggered.join(", ")
+                    );
+                }
                 println!("  Time anchor:        {}", anchor_str);
                 println!(
                     "  License state:      {}",

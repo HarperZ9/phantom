@@ -104,6 +104,7 @@ pub struct VersionPayload {
 pub struct SelfCheckPayload {
     pub healthy: bool,
     pub debugger_detected: bool,
+    pub debugger_detectors_triggered: Vec<&'static str>,
     pub time_anchor: &'static str,
     pub license_state_verified: bool,
     pub activation_cooldown_secs: u64,

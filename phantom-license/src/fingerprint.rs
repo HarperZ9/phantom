@@ -47,6 +47,47 @@ impl MachineFingerprint {
             if let Ok(id) = std::fs::read_to_string("/sys/class/dmi/id/board_serial") {
                 hasher.update(id.trim().as_bytes());
             }
+            if let Ok(id) = std::fs::read_to_string("/sys/class/dmi/id/product_serial") {
+                hasher.update(id.trim().as_bytes());
+            }
+            // CPU vendor + model. Constant across boots, hard to spoof
+            // without a hypervisor.
+            if let Ok(cpuinfo) = std::fs::read_to_string("/proc/cpuinfo") {
+                for line in cpuinfo.lines() {
+                    let t = line.trim_start();
+                    if t.starts_with("vendor_id") || t.starts_with("model name") {
+                        hasher.update(line.as_bytes());
+                    }
+                }
+            }
+            // Sorted MAC addresses for every non-virtual interface.
+            // Sorting keeps the fingerprint stable across boot ordering
+            // and hotplug reordering; filtering out loopback / veth /
+            // docker interfaces avoids container-induced churn.
+            if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
+                let mut macs: Vec<String> = entries
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| {
+                        let name = e.file_name();
+                        let name = name.to_string_lossy().to_string();
+                        if name == "lo"
+                            || name.starts_with("docker")
+                            || name.starts_with("veth")
+                            || name.starts_with("br-")
+                        {
+                            return None;
+                        }
+                        std::fs::read_to_string(e.path().join("address"))
+                            .ok()
+                            .map(|s| s.trim().to_string())
+                            .filter(|m| !m.is_empty() && m != "00:00:00:00:00:00")
+                    })
+                    .collect();
+                macs.sort();
+                for m in macs {
+                    hasher.update(m.as_bytes());
+                }
+            }
         }
 
         let full = hasher.finalize();

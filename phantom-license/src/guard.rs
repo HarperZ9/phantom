@@ -19,6 +19,25 @@ pub struct LicenseGuard {
 impl LicenseGuard {
     pub fn load() -> Self {
         let path = license_file_path();
+
+        // Advance the time anchor first. If the wall clock has been
+        // rewound beyond the grace window, refuse to honor any stored
+        // license this cycle — the attacker is trying to freeze time
+        // to bypass expiration. `NoAnchor` is fine: it just means we
+        // have not seen this machine before.
+        if let Some(parent) = path.parent() {
+            if matches!(
+                crate::time_anchor::check_and_advance(parent),
+                crate::time_anchor::AnchorVerdict::ClockRewound { .. }
+            ) {
+                return LicenseGuard {
+                    license: None,
+                    tier: LicenseTier::Free,
+                    key_str: None,
+                };
+            }
+        }
+
         if let Ok(data) = std::fs::read_to_string(&path) {
             if let Ok(stored) = serde_json::from_str::<StoredLicense>(&data) {
                 if let Ok(license) = validate_license_key(&stored.key) {

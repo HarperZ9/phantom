@@ -10,8 +10,38 @@ All notable changes to Phantom are documented here. Format follows
 - Adversarial license-key fuzz test: every single-bit flip of a valid key
   is confirmed to fail HMAC verification (480 cases per run)
 - Truncated-key and noisy-input license validation coverage
-- Pinned assertion on the license signing key so refactors that would
-  invalidate all issued keys fail loudly in CI
+
+### Changed — Sprint 12: anti-reversal hardening
+- **Master signing key is now XOR-obfuscated at build time.** `build.rs`
+  scrambles the seed into per-byte-position XOR bytes and emits only the
+  obfuscated array. The runtime `keys::master_key()` unscrambles into a
+  stack buffer with an `#[inline(never)]` derivation to prevent
+  constant-folding the plaintext back into `.rodata`. Verified: `strings`
+  on the release binary reports **0** hits for the old plaintext key.
+- **Domain-separated key derivation.** Every subsystem now takes a
+  purpose-specific subkey (`LICENSE_PURPOSE`, `INTEGRITY_PURPOSE`,
+  `STATE_PURPOSE`, `TIME_ANCHOR_PURPOSE`) via HMAC-SHA256(master,
+  purpose). Recovering one subkey does not expose the others.
+- **Time-anchor / clock-rollback defense.** `LicenseGuard::load()` now
+  writes a HMAC'd monotone-forward anchor to `<data_dir>/.time_anchor`.
+  A wall clock rewound by more than 24 hours (`GRACE_SECS`) causes the
+  guard to refuse any stored license, blocking the "set the clock back"
+  bypass of license expiration.
+- **License-key signing pin migrated** to the SHA-256 of the derived
+  subkey (no longer pins the plaintext string, which would defeat the
+  obfuscation).
+
+### Added — machine fingerprint diversity (Linux)
+- `product_serial` DMI reader
+- `/proc/cpuinfo` vendor + model line
+- Sorted MAC addresses for every non-virtual interface (skips `lo`,
+  `docker*`, `veth*`, `br-*`)
+
+### Security
+- The plaintext `SIGNING_KEY` constant is gone. The old key was
+  `phantom-license-hmac-v1-key` — every pre-Sprint-12 license was
+  signed with it and is now invalid. No customer licenses were issued
+  under it, so no field migration is required.
 
 ## [0.5.0] — Sprint 10
 

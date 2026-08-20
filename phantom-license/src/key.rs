@@ -1,4 +1,5 @@
 use crate::fingerprint::MachineFingerprint;
+use crate::keys;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -7,7 +8,13 @@ use thiserror::Error;
 type HmacSha256 = Hmac<Sha256>;
 
 const KEY_VERSION: u8 = 1;
-const SIGNING_KEY: &[u8] = b"phantom-license-hmac-v1-key";
+
+/// The HMAC key used to sign and verify license payloads. Derived at
+/// runtime from the obfuscated master key so `strings` on the shipping
+/// binary reveals only the purpose label, not the key material.
+fn license_signing_key() -> [u8; 32] {
+    keys::derive_key(keys::LICENSE_PURPOSE)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LicenseTier {
@@ -142,7 +149,8 @@ pub fn generate_license_key(
     raw[6..10].copy_from_slice(&issued.to_le_bytes());
     raw[10..26].copy_from_slice(&machine.hash);
 
-    let mut mac = HmacSha256::new_from_slice(SIGNING_KEY).unwrap();
+    let signing_key = license_signing_key();
+    let mut mac = HmacSha256::new_from_slice(&signing_key).unwrap();
     mac.update(&raw[..RAW_PAYLOAD_LEN]);
     let sig = mac.finalize().into_bytes();
     raw[RAW_PAYLOAD_LEN..].copy_from_slice(&sig);
@@ -164,7 +172,8 @@ pub fn validate_license_key(key_str: &str) -> Result<License, LicenseError> {
         return Err(LicenseError::UnsupportedVersion(version));
     }
 
-    let mut mac = HmacSha256::new_from_slice(SIGNING_KEY).unwrap();
+    let signing_key = license_signing_key();
+    let mut mac = HmacSha256::new_from_slice(&signing_key).unwrap();
     mac.update(&raw[..RAW_PAYLOAD_LEN]);
     mac.verify_slice(&raw[RAW_PAYLOAD_LEN..])
         .map_err(|_| LicenseError::InvalidSignature)?;
@@ -446,13 +455,22 @@ mod tests {
         assert!(validate_license_key(&noisy).is_ok());
     }
 
-    // The signing key is a fixed compile-time secret. If someone were to
-    // swap it accidentally in a refactor, every previously-issued key
-    // would silently start failing — this pins the value so a review
-    // catches the change.
+    // The derived signing key must stay stable across builds. If the
+    // master seed or the domain-separation string were to change, every
+    // previously-issued license would silently start failing — pinning
+    // its SHA-256 makes such a refactor fail loudly in CI without
+    // exposing the key itself in the source.
     #[test]
-    fn signing_key_is_pinned() {
-        assert_eq!(SIGNING_KEY, b"phantom-license-hmac-v1-key");
+    fn derived_signing_key_is_pinned() {
+        use sha2::Digest;
+        let sk = license_signing_key();
+        let digest = sha2::Sha256::digest(sk);
+        let hex: String = digest.iter().map(|b| format!("{:02x}", b)).collect();
+        assert_eq!(
+            hex, "d1f19a1c7e6130266d3d4d438553f1fa22d0a2cf84698c99eb2cbc84db30d500",
+            "derived license signing key changed — this invalidates every issued license"
+        );
         assert_eq!(KEY_VERSION, 1);
+        assert_eq!(crate::keys::master_generation(), 1);
     }
 }

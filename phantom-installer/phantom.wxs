@@ -2,13 +2,27 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
+  <!--
+    Phantom MSI descriptor.
+
+    v1.0 scope is Layer-2 (user-mode registry spoofing) only. The
+    Layer-1 kernel driver is deferred (WHQL attestation is a Phase-2
+    project) so this file does NOT install a driver, does NOT copy
+    phantom.sys/phantom.inf, and does NOT invoke pnputil. The prior
+    stub is preserved in git history — grep for DriverFeature there
+    when Layer 1 lands.
+
+    UpgradeCode stays constant across versions so a newer MSI
+    replaces an older one via MajorUpgrade. NEVER change it.
+  -->
+
+  <?define ProductVersion = "0.6.0" ?>
   <?define BuildDir = "..\target\release" ?>
-  <?define DriverDir = "..\phantom-driver" ?>
 
   <Product Id="*"
            Name="Phantom"
            Language="1033"
-           Version="0.5.0"
+           Version="$(var.ProductVersion)"
            Manufacturer="Phantom"
            UpgradeCode="{7B2E4F9A-3D1C-4E8B-A5F6-2C9D0E1F3A4B}">
 
@@ -24,7 +38,7 @@
     <MediaTemplate EmbedCab="yes" />
 
     <!-- ================================================================ -->
-    <!-- Features                                                         -->
+    <!-- Feature: one feature only for v1 (no optional driver yet).       -->
     <!-- ================================================================ -->
 
     <Feature Id="CoreFeature" Title="Phantom Core" Level="1"
@@ -33,15 +47,8 @@
       <ComponentRef Id="PhantomCli" />
       <ComponentRef Id="PhantomSvc" />
       <ComponentRef Id="PhantomTray" />
-      <ComponentRef Id="ServiceInstall" />
       <ComponentRef Id="TrayAutostart" />
       <ComponentRef Id="StartMenuShortcut" />
-    </Feature>
-
-    <Feature Id="DriverFeature" Title="Kernel Driver" Level="1"
-             Description="Layer 1 kernel filter driver for disk, NIC, GPU, TPM, and EDID interception"
-             AllowAdvertise="no">
-      <ComponentRef Id="DriverFiles" />
     </Feature>
 
     <!-- ================================================================ -->
@@ -66,48 +73,27 @@
       <Component Id="PhantomCli" Guid="*" Win64="yes">
         <File Id="PhantomCliExe"
               Source="$(var.BuildDir)\phantom-cli.exe"
+              Name="phantom.exe"
               KeyPath="yes" />
       </Component>
 
+      <!--
+        phantom-svc is BOTH a plain-file installed binary AND the
+        target of the ServiceInstall entry. Keeping the ServiceInstall
+        inside the same component that owns the file guarantees the
+        Windows Installer sequences the file copy before the service
+        registration, and the file removal after the service
+        deregistration, without any manual sequencing.
+      -->
       <Component Id="PhantomSvc" Guid="*" Win64="yes">
         <File Id="PhantomSvcExe"
               Source="$(var.BuildDir)\phantom-svc.exe"
               KeyPath="yes" />
-      </Component>
-
-      <Component Id="PhantomTray" Guid="*" Win64="yes">
-        <File Id="PhantomTrayExe"
-              Source="$(var.BuildDir)\phantom-tray.exe"
-              KeyPath="yes" />
-      </Component>
-
-      <Component Id="DriverFiles" Guid="*" Win64="yes">
-        <File Id="PhantomSys"
-              Source="$(var.DriverDir)\phantom.sys" />
-        <File Id="PhantomInf"
-              Source="$(var.DriverDir)\phantom.inf"
-              KeyPath="yes" />
-      </Component>
-
-    </DirectoryRef>
-
-    <!-- ================================================================ -->
-    <!-- Components: Windows Service                                      -->
-    <!-- ================================================================ -->
-
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Component Id="ServiceInstall" Guid="*" Win64="yes">
-        <File Id="SvcExeRef"
-              Source="$(var.BuildDir)\phantom-svc.exe"
-              KeyPath="yes"
-              Name="phantom-svc-ref.exe">
-          <CopyFile Id="SvcCopy" DestinationProperty="INSTALLFOLDER" />
-        </File>
         <ServiceInstall Id="PhantomSvcInstall"
                         Type="ownProcess"
                         Name="PhantomService"
                         DisplayName="Phantom Privacy Service"
-                        Description="Background orchestrator for hardware identity privacy. Manages profile application across kernel, registry, and firmware layers."
+                        Description="Background orchestrator for hardware identity privacy. Manages profile application across the registry layer."
                         Start="auto"
                         Account="LocalSystem"
                         ErrorControl="normal"
@@ -119,6 +105,13 @@
                         Remove="uninstall"
                         Wait="yes" />
       </Component>
+
+      <Component Id="PhantomTray" Guid="*" Win64="yes">
+        <File Id="PhantomTrayExe"
+              Source="$(var.BuildDir)\phantom-tray.exe"
+              KeyPath="yes" />
+      </Component>
+
     </DirectoryRef>
 
     <!-- ================================================================ -->
@@ -158,10 +151,17 @@
     </DirectoryRef>
 
     <!-- ================================================================ -->
-    <!-- Custom Actions                                                   -->
+    <!-- Custom Action: pre-uninstall cleanup                             -->
+    <!--                                                                  -->
+    <!--   Runs phantom-svc.exe with the cleanup flag. It reverts every  -->
+    <!--   active identity layer via the IPC socket (or, if the service  -->
+    <!--   is already stopped, a direct in-process revert), removes the  -->
+    <!--   tray Run value, and clears the sealed config file.            -->
+    <!--                                                                  -->
+    <!--   Return=ignore so a cleanup failure (service already gone or   -->
+    <!--   config already missing) does not stop the uninstall.          -->
     <!-- ================================================================ -->
 
-    <!-- Pre-uninstall: revert all identity layers and clean up -->
     <SetProperty Id="CleanupAction"
                  Value="&quot;[INSTALLFOLDER]phantom-svc.exe&quot; --cleanup"
                  Before="CleanupAction"
@@ -173,53 +173,17 @@
                   Impersonate="no"
                   Return="ignore" />
 
-    <!-- Install: add kernel driver via pnputil -->
-    <SetProperty Id="DriverInstallAction"
-                 Value="pnputil.exe /add-driver &quot;[INSTALLFOLDER]phantom.inf&quot; /install"
-                 Before="DriverInstallAction"
-                 Sequence="execute" />
-    <CustomAction Id="DriverInstallAction"
-                  BinaryKey="WixCA"
-                  DllEntry="WixQuietExec64"
-                  Execute="deferred"
-                  Impersonate="no"
-                  Return="ignore" />
-
-    <!-- Uninstall: remove kernel driver -->
-    <SetProperty Id="DriverRemoveAction"
-                 Value="pnputil.exe /delete-driver &quot;[INSTALLFOLDER]phantom.inf&quot; /uninstall"
-                 Before="DriverRemoveAction"
-                 Sequence="execute" />
-    <CustomAction Id="DriverRemoveAction"
-                  BinaryKey="WixCA"
-                  DllEntry="WixQuietExec64"
-                  Execute="deferred"
-                  Impersonate="no"
-                  Return="ignore" />
-
-    <!-- ================================================================ -->
-    <!-- Install / Uninstall Sequence                                     -->
-    <!-- ================================================================ -->
-
     <InstallExecuteSequence>
-      <!-- On install: add driver after files are copied and service is started -->
-      <Custom Action="DriverInstallAction" After="StartServices">
-        NOT REMOVE~="ALL" AND &amp;DriverFeature=3
-      </Custom>
-
-      <!-- On uninstall: revert layers before the service is stopped -->
+      <!-- On uninstall (and only on uninstall), revert identity layers
+           BEFORE the service is stopped so the running service can
+           still receive the IPC request. -->
       <Custom Action="CleanupAction" Before="StopServices">
         REMOVE~="ALL"
-      </Custom>
-
-      <!-- On uninstall: remove driver after service is stopped -->
-      <Custom Action="DriverRemoveAction" After="DeleteServices">
-        REMOVE~="ALL" AND &amp;DriverFeature=2
       </Custom>
     </InstallExecuteSequence>
 
     <!-- ================================================================ -->
-    <!-- UI: minimal dialog set                                           -->
+    <!-- UI: minimal dialog set + EULA                                    -->
     <!-- ================================================================ -->
 
     <UIRef Id="WixUI_Minimal" />

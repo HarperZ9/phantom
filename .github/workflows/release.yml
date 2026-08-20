@@ -60,6 +60,22 @@ jobs:
           cp target/${{ matrix.target }}/release/phantom-svc dist/
           cp LICENSE README.md CHANGELOG.md dist/
           tar -czf phantom-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.tar.gz -C dist .
+      # Sign the raw Windows PE binaries BEFORE packaging them into
+      # the zip and BEFORE the MSI wraps them. The MSI carries the
+      # signed exes inside its cab, and the MSI itself is signed
+      # separately below. sign.cmd no-ops (exit 0) when
+      # PHANTOM_SIGNING_CERT_B64 is unset, so dev / PR runs still
+      # produce a usable-but-unsigned build.
+      - name: Sign Windows binaries
+        if: matrix.os == 'windows-latest'
+        env:
+          PHANTOM_SIGNING_CERT_B64: ${{ secrets.PHANTOM_SIGNING_CERT_B64 }}
+          PHANTOM_SIGNING_CERT_PASS: ${{ secrets.PHANTOM_SIGNING_CERT_PASS }}
+        shell: cmd
+        run: |
+          call phantom-installer\sign.cmd target\${{ matrix.target }}\release\phantom-cli.exe || exit /b 1
+          call phantom-installer\sign.cmd target\${{ matrix.target }}\release\phantom-svc.exe || exit /b 1
+          call phantom-installer\sign.cmd target\${{ matrix.target }}\release\phantom-tray.exe || exit /b 1
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -74,11 +90,57 @@ jobs:
           Copy-Item README.md dist/
           Copy-Item CHANGELOG.md dist/
           Compress-Archive -Path dist/* -DestinationPath phantom-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.zip
+      # WiX v3 is preinstalled on windows-latest images, but its
+      # path (C:\Program Files (x86)\WiX Toolset v3.14\bin) is not on
+      # PATH by default. Add it, then build the MSI via build.cmd.
+      # The MSI's ProductVersion in the .wxs must match
+      # PHANTOM_MSI_VERSION so the output filename tracks the tag.
+      - name: Build MSI (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          PHANTOM_MSI_VERSION: ${{ env.RELEASE_VERSION }}
+        run: |
+          $wixCandidates = @(
+            'C:\Program Files (x86)\WiX Toolset v3.14\bin',
+            'C:\Program Files (x86)\WiX Toolset v3.11\bin'
+          )
+          $wixBin = $wixCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $wixBin) {
+            choco install wixtoolset -y --no-progress
+            $wixBin = $wixCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $wixBin) { throw 'WiX Toolset v3 not found after install' }
+          $env:PATH = "$wixBin;$env:PATH"
+          # Strip a leading 'v' from a tag-shaped version so the WiX
+          # ProductVersion (must be N.N.N) accepts it.
+          $env:PHANTOM_MSI_VERSION = $env:PHANTOM_MSI_VERSION -replace '^v', ''
+          Push-Location phantom-installer
+          cmd /c build.cmd
+          Pop-Location
+      - name: Sign MSI (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          PHANTOM_SIGNING_CERT_B64: ${{ secrets.PHANTOM_SIGNING_CERT_B64 }}
+          PHANTOM_SIGNING_CERT_PASS: ${{ secrets.PHANTOM_SIGNING_CERT_PASS }}
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_VERSION -replace '^v', ''
+          $msi = "phantom-installer/out/PhantomSetup-v$version.msi"
+          if (-not (Test-Path $msi)) { throw "MSI not found at $msi" }
+          cmd /c "phantom-installer\sign.cmd $msi"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: phantom-${{ matrix.target }}
           path: phantom-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.*
+          if-no-files-found: error
+      - name: Upload MSI
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantom-msi
+          path: phantom-installer/out/PhantomSetup-*.msi
           if-no-files-found: error
 
   release:

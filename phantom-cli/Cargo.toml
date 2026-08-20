@@ -3,7 +3,7 @@ name = "phantom-cli"
 version = "0.5.0"
 edition = "2021"
 description = "Hardware identity privacy tool"
-license = "MIT"
+license = "Proprietary"
 readme = "../README.md"
 
 [dependencies]

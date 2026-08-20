@@ -221,4 +221,4 @@ Enterprise deployments can set `PHANTOM_DATA_DIR` to a shared or managed path (e
 
 ## License
 
-MIT
+Proprietary. See [LICENSE](LICENSE) for terms.

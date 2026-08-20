@@ -3,7 +3,7 @@ name = "phantom-svc"
 version = "0.5.0"
 edition = "2021"
 description = "Phantom privacy service — background orchestrator"
-license = "MIT"
+license = "Proprietary"
 
 [[bin]]
 name = "phantom-svc"

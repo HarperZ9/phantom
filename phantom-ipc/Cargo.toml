@@ -1,0 +1,10 @@
+[package]
+name = "phantom-ipc"
+version = "0.5.0"
+edition = "2021"
+description = "Named-pipe IPC protocol for Phantom service communication"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

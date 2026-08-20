@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <?define BuildDir = "..\target\release" ?>
+  <?define DriverDir = "..\phantom-driver" ?>
+
+  <Product Id="*"
+           Name="Phantom"
+           Language="1033"
+           Version="0.5.0"
+           Manufacturer="Phantom"
+           UpgradeCode="{7B2E4F9A-3D1C-4E8B-A5F6-2C9D0E1F3A4B}">
+
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             InstallPrivileges="elevated"
+             Description="Hardware identity privacy tool"
+             Platform="x64" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Phantom is already installed."
+                  Schedule="afterInstallInitialize" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ================================================================ -->
+    <!-- Features                                                         -->
+    <!-- ================================================================ -->
+
+    <Feature Id="CoreFeature" Title="Phantom Core" Level="1"
+             Description="Service, tray app, and CLI"
+             Absent="disallow" AllowAdvertise="no">
+      <ComponentRef Id="PhantomCli" />
+      <ComponentRef Id="PhantomSvc" />
+      <ComponentRef Id="PhantomTray" />
+      <ComponentRef Id="ServiceInstall" />
+      <ComponentRef Id="TrayAutostart" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <Feature Id="DriverFeature" Title="Kernel Driver" Level="1"
+             Description="Layer 1 kernel filter driver for disk, NIC, GPU, TPM, and EDID interception"
+             AllowAdvertise="no">
+      <ComponentRef Id="DriverFiles" />
+    </Feature>
+
+    <!-- ================================================================ -->
+    <!-- Directory layout                                                 -->
+    <!-- ================================================================ -->
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Phantom" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="PhantomMenuFolder" Name="Phantom" />
+      </Directory>
+    </Directory>
+
+    <!-- ================================================================ -->
+    <!-- Components: Binaries                                             -->
+    <!-- ================================================================ -->
+
+    <DirectoryRef Id="INSTALLFOLDER">
+
+      <Component Id="PhantomCli" Guid="*" Win64="yes">
+        <File Id="PhantomCliExe"
+              Source="$(var.BuildDir)\phantom-cli.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <Component Id="PhantomSvc" Guid="*" Win64="yes">
+        <File Id="PhantomSvcExe"
+              Source="$(var.BuildDir)\phantom-svc.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <Component Id="PhantomTray" Guid="*" Win64="yes">
+        <File Id="PhantomTrayExe"
+              Source="$(var.BuildDir)\phantom-tray.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <Component Id="DriverFiles" Guid="*" Win64="yes">
+        <File Id="PhantomSys"
+              Source="$(var.DriverDir)\phantom.sys" />
+        <File Id="PhantomInf"
+              Source="$(var.DriverDir)\phantom.inf"
+              KeyPath="yes" />
+      </Component>
+
+    </DirectoryRef>
+
+    <!-- ================================================================ -->
+    <!-- Components: Windows Service                                      -->
+    <!-- ================================================================ -->
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="ServiceInstall" Guid="*" Win64="yes">
+        <File Id="SvcExeRef"
+              Source="$(var.BuildDir)\phantom-svc.exe"
+              KeyPath="yes"
+              Name="phantom-svc-ref.exe">
+          <CopyFile Id="SvcCopy" DestinationProperty="INSTALLFOLDER" />
+        </File>
+        <ServiceInstall Id="PhantomSvcInstall"
+                        Type="ownProcess"
+                        Name="PhantomService"
+                        DisplayName="Phantom Privacy Service"
+                        Description="Background orchestrator for hardware identity privacy. Manages profile application across kernel, registry, and firmware layers."
+                        Start="auto"
+                        Account="LocalSystem"
+                        ErrorControl="normal"
+                        Arguments="" />
+        <ServiceControl Id="PhantomSvcControl"
+                        Name="PhantomService"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- ================================================================ -->
+    <!-- Components: Tray auto-start at user login                        -->
+    <!-- ================================================================ -->
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="TrayAutostart" Guid="*" Win64="yes">
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                       Name="PhantomTray"
+                       Type="string"
+                       Value="[INSTALLFOLDER]phantom-tray.exe"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- ================================================================ -->
+    <!-- Components: Start Menu shortcut                                  -->
+    <!-- ================================================================ -->
+
+    <DirectoryRef Id="PhantomMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="*" Win64="yes">
+        <Shortcut Id="PhantomTrayShortcut"
+                  Name="Phantom"
+                  Description="Hardware identity privacy tray"
+                  Target="[INSTALLFOLDER]phantom-tray.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemovePhantomMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKCU"
+                       Key="SOFTWARE\Phantom"
+                       Name="StartMenuInstalled"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- ================================================================ -->
+    <!-- Custom Actions                                                   -->
+    <!-- ================================================================ -->
+
+    <!-- Pre-uninstall: revert all identity layers and clean up -->
+    <SetProperty Id="CleanupAction"
+                 Value="&quot;[INSTALLFOLDER]phantom-svc.exe&quot; --cleanup"
+                 Before="CleanupAction"
+                 Sequence="execute" />
+    <CustomAction Id="CleanupAction"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Install: add kernel driver via pnputil -->
+    <SetProperty Id="DriverInstallAction"
+                 Value="pnputil.exe /add-driver &quot;[INSTALLFOLDER]phantom.inf&quot; /install"
+                 Before="DriverInstallAction"
+                 Sequence="execute" />
+    <CustomAction Id="DriverInstallAction"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- Uninstall: remove kernel driver -->
+    <SetProperty Id="DriverRemoveAction"
+                 Value="pnputil.exe /delete-driver &quot;[INSTALLFOLDER]phantom.inf&quot; /uninstall"
+                 Before="DriverRemoveAction"
+                 Sequence="execute" />
+    <CustomAction Id="DriverRemoveAction"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <!-- ================================================================ -->
+    <!-- Install / Uninstall Sequence                                     -->
+    <!-- ================================================================ -->
+
+    <InstallExecuteSequence>
+      <!-- On install: add driver after files are copied and service is started -->
+      <Custom Action="DriverInstallAction" After="StartServices">
+        NOT REMOVE~="ALL" AND &amp;DriverFeature=3
+      </Custom>
+
+      <!-- On uninstall: revert layers before the service is stopped -->
+      <Custom Action="CleanupAction" Before="StopServices">
+        REMOVE~="ALL"
+      </Custom>
+
+      <!-- On uninstall: remove driver after service is stopped -->
+      <Custom Action="DriverRemoveAction" After="DeleteServices">
+        REMOVE~="ALL" AND &amp;DriverFeature=2
+      </Custom>
+    </InstallExecuteSequence>
+
+    <!-- ================================================================ -->
+    <!-- UI: minimal dialog set                                           -->
+    <!-- ================================================================ -->
+
+    <UIRef Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="eula.rtf" />
+
+  </Product>
+</Wix>

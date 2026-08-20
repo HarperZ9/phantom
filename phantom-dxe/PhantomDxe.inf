@@ -1,0 +1,36 @@
+## @file
+#  Phantom DXE Driver — SMBIOS identity privacy at the firmware level.
+#
+#  Loads during the DXE phase and rewrites SMBIOS table string fields
+#  in firmware memory before the OS boots. Profile data is read from
+#  an EFI NVRAM variable set by the Phantom CLI.
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PhantomDxe
+  FILE_GUID                      = 7B3E8A1C-4F2D-49A5-B1C6-8D0F3E5A72B9
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 0.1.0
+  ENTRY_POINT                    = PhantomDxeMain
+
+[Sources]
+  src/efi_main.c
+  src/smbios_rewrite.c
+  src/smbios_rewrite.h
+  src/profile_efivar.c
+  src/profile_efivar.h
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  UefiDriverEntryPoint
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  UefiLib
+  BaseMemoryLib
+  DebugLib
+
+[Depex]
+  TRUE

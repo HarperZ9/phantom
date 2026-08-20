@@ -1,0 +1,48 @@
+;
+; phantom.inf — Phantom hardware identity privacy driver
+;
+; This INF installs the Phantom kernel filter driver as an upper filter
+; for disk, NIC, and GPU device classes.
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System
+ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider    = %ManufacturerName%
+CatalogFile = phantom.cat
+DriverVer   = 08/19/2026,0.2.0
+PnpLockDown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+phantom.sys = 1,,
+
+[DefaultInstall.NTamd64]
+CopyFiles = Phantom.CopyFiles
+
+[Phantom.CopyFiles]
+phantom.sys
+
+[DefaultInstall.NTamd64.Services]
+AddService = PhantomSpoof,,Phantom.Service
+
+[Phantom.Service]
+DisplayName    = %ServiceDisplayName%
+Description    = %ServiceDescription%
+ServiceBinary  = %13%\phantom.sys
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+LoadOrderGroup = Extended Base
+
+[Strings]
+ManufacturerName    = "Phantom"
+DiskName            = "Phantom Driver Installation Disk"
+ServiceDisplayName  = "Phantom Identity Privacy Driver"
+ServiceDescription  = "Kernel filter driver for hardware identity privacy"

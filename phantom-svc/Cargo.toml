@@ -1,0 +1,20 @@
+[package]
+name = "phantom-svc"
+version = "0.5.0"
+edition = "2021"
+description = "Phantom privacy service — background orchestrator"
+license = "MIT"
+
+[[bin]]
+name = "phantom-svc"
+path = "src/main.rs"
+
+[dependencies]
+phantom-ipc = { path = "../phantom-ipc" }
+phantom-cli = { path = "../phantom-cli" }
+phantom-license = { path = "../phantom-license" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-appender = "0.2"

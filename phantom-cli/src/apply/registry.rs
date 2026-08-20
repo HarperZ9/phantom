@@ -143,7 +143,10 @@ fn apply_registry_windows(profile: &HardwareProfile) -> ApplyResult {
                         original_value: old_value,
                     });
                 }
-                match key.set_value(name, new_value) {
+                // *new_value gives &String — winreg's set_value takes
+                // value: &T where T: ToRegValue; ToRegValue is impl'd
+                // for String but not &String, so we deref one level.
+                match key.set_value(name, *new_value) {
                     Ok(_) => applied.push(format!("{}\\{}", path, name)),
                     Err(e) => failed.push((format!("{}\\{}", path, name), e.to_string())),
                 }

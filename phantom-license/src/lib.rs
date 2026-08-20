@@ -4,6 +4,7 @@ pub mod integrity;
 pub mod key;
 pub(crate) mod keys;
 pub mod rate_limit;
+pub mod redact;
 pub mod time_anchor;
 pub mod watermark;
 

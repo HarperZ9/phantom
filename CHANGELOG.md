@@ -160,6 +160,33 @@ All notable changes to Phantom are documented here. Format follows
   public helpers for CLI-side tamper seals under the STATE_PURPOSE
   subkey.
 
+### Changed — Sprint 18: signed IPC + log/panic redaction
+- **Every phantom-ipc message is HMAC-signed.** Wire format bumped
+  to protocol v2: `[u32 LE total_len] [32-byte HMAC-SHA256]
+  [JSON body]`. Signing uses the STATE_PURPOSE subkey. An attacker
+  with SYSTEM or root can still take the pipe endpoint, but can no
+  longer forge a payload without the master key. A v1 peer talking
+  to a v2 peer sees MAC verification fail and disconnects.
+- **Log-line and panic-message redaction.** `phantom_license::redact`
+  scrubs three shapes that only appear in output when a secret is
+  being logged: 19+ dashed base32 groups (license keys), 64-char
+  lowercase hex (HMAC state / origin marks / attempt log entries),
+  and 32-char lowercase hex (fingerprints). Regex-free single-pass
+  scanner. Replaced with fixed placeholders that preserve log-grep.
+- **Panic hook installed at startup** in both `phantom-cli` and
+  `phantom-svc` `main()`. Redacted panic messages hit stderr and
+  crash reporters; the original hook still runs so backtrace
+  collectors keep working.
+
+### Added
+- `phantom_ipc::PROTOCOL_VERSION` bumped from 1 to 2 (breaking).
+- 5 new signed-protocol tests: shorter-than-MAC rejection, payload
+  bit-flip rejection, MAC byte-flip rejection, unsigned-frame
+  rejection, per-payload determinism.
+- 8 new redact tests: plaintext untouched, short hex untouched,
+  fingerprint / MAC / license-key scrubbing, short dashed UUID not
+  matched, multi-secret line, panic-hook idempotency.
+
 ## [0.5.0] — Sprint 10
 
 ### Added

@@ -301,6 +301,7 @@ dependencies = [
 name = "phantom-ipc"
 version = "0.5.0"
 dependencies = [
+ "phantom-license",
  "serde",
  "serde_json",
 ]

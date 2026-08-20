@@ -127,6 +127,10 @@ enum ProfileAction {
 }
 
 fn main() {
+    // Redact license keys, HMAC hexes, and fingerprints from any
+    // panic message before it reaches stderr or a crash reporter.
+    phantom_license::redact::install_panic_hook();
+
     // Harden this process before we do anything else. On Linux this
     // disables core dumps and blocks foreign-UID ptrace via
     // PR_SET_DUMPABLE=0 — closing the "core-dump the process and

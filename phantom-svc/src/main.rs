@@ -6,6 +6,10 @@ mod state;
 use std::env;
 
 fn main() {
+    // Redact secrets from any panic message before it reaches the
+    // log rotator or stderr.
+    phantom_license::redact::install_panic_hook();
+
     // Harden this process before doing anything else. On Linux this
     // disables core dumps (PR_SET_DUMPABLE=0) so a crash cannot spill
     // the master key onto disk. No-op on Windows for now.

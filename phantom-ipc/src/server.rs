@@ -244,7 +244,10 @@ mod tests {
     fn echo_handler_ping() {
         let mut handler = EchoHandler;
         let resp = handler.handle(Request::Ping);
-        assert!(matches!(resp, Response::Pong { version: 1 }));
+        assert!(matches!(
+            resp,
+            Response::Pong { version } if version == crate::PROTOCOL_VERSION
+        ));
     }
 
     #[test]

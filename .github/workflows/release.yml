@@ -130,14 +130,14 @@ jobs:
           if (-not (Test-Path $msi)) { throw "MSI not found at $msi" }
           cmd /c "phantom-installer\sign.cmd $msi"
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phantom-${{ matrix.target }}
           path: phantom-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.*
           if-no-files-found: error
       - name: Upload MSI
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phantom-msi
           path: phantom-installer/out/PhantomSetup-*.msi

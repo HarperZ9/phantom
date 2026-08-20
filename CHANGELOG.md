@@ -60,6 +60,30 @@ All notable changes to Phantom are documented here. Format follows
 - `phantom version` and `phantom --json version`
 - `phantom_cli::build_info` module surfacing all compile-time metadata
 
+### Changed — Sprint 14: profile watermarking + memory hygiene
+- **Every generated profile carries a signed `origin_mark`.** The mark
+  covers `SHA-256(canonical_profile) || origin_fingerprint || tier ||
+  issued_epoch_days`, signed with the STATE_PURPOSE subkey. Import
+  policy:
+  - **Unmarked** — legacy profile, loads with a note
+  - **Local** — verified, generated on this machine, loads silently
+  - **Foreign** — verified, generated elsewhere; **loads only for Pro
+    and Enterprise tiers**, Free tier refuses
+  - **ContentTampered** — the mark's covered hash disagrees with the
+    profile bytes (someone hand-edited a marked file); rejected
+  - **Invalid** — mark present but MAC forged; rejected
+  - **Malformed** — structural corruption in the mark; rejected
+- **Master key stack buffers are volatile-zeroed** after each subkey
+  derivation. `volatile_zero()` uses `ptr::write_volatile` + a Release
+  fence so the writes are not dead-code-eliminated the way a plain
+  `= [0; N]` on a stack-local would be.
+
+### Added
+- `phantom_license::watermark` module with `sign`, `sign_bytes`,
+  `verify`, `Verdict`, `OriginMark` public surface (9 tests)
+- `phantom_cli::profile::sign_profile`, `check_origin`, `ImportVerdict`
+  helpers (used by `save_profile` and the CLI import handler)
+
 ## [0.5.0] — Sprint 10
 
 ### Added

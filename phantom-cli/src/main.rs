@@ -239,19 +239,59 @@ fn main() {
 
             ProfileAction::Import { path } => match std::fs::read_to_string(&path) {
                 Ok(json) => match serde_json::from_str::<profile::schema::HardwareProfile>(&json) {
-                    Ok(prof) => match profile::save_profile(&prof) {
-                        Ok(saved_path) => {
-                            println!(
-                                "  Imported profile '{}' to {}",
-                                prof.metadata.name,
-                                saved_path.display()
-                            );
+                    Ok(prof) => {
+                        // Enforce provenance policy before storing anything.
+                        let verdict = profile::check_origin(&prof);
+                        let guard = phantom_license::LicenseGuard::load();
+
+                        match &verdict {
+                            profile::ImportVerdict::ContentTampered => {
+                                eprintln!("  Refusing import: profile content was modified after signing.");
+                                eprintln!("  The origin_mark does not cover the current bytes.");
+                                std::process::exit(1);
+                            }
+                            profile::ImportVerdict::Invalid => {
+                                eprintln!("  Refusing import: origin mark is forged (MAC fails).");
+                                std::process::exit(1);
+                            }
+                            profile::ImportVerdict::Malformed => {
+                                eprintln!("  Refusing import: origin mark is malformed.");
+                                std::process::exit(1);
+                            }
+                            profile::ImportVerdict::Foreign { origin_tier } => {
+                                if guard.tier() == phantom_license::LicenseTier::Free {
+                                    eprintln!(
+                                        "  Refusing import: profile was generated on a different machine ({} tier).",
+                                        origin_tier
+                                    );
+                                    eprintln!("  Cross-machine profile import requires a Pro or Enterprise license.");
+                                    std::process::exit(1);
+                                }
+                                println!(
+                                    "  Note: importing foreign profile (origin tier: {}).",
+                                    origin_tier
+                                );
+                            }
+                            profile::ImportVerdict::Unmarked => {
+                                println!("  Note: profile is unmarked (legacy or hand-authored).");
+                            }
+                            profile::ImportVerdict::Local => {}
                         }
-                        Err(e) => {
-                            eprintln!("  Error saving imported profile: {}", e);
-                            std::process::exit(1);
+
+                        match profile::save_profile(&prof) {
+                            Ok(saved_path) => {
+                                println!(
+                                    "  Imported profile '{}' to {}",
+                                    prof.metadata.name,
+                                    saved_path.display()
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("  Error saving imported profile: {}", e);
+                                std::process::exit(1);
+                            }
                         }
-                    },
+                    }
                     Err(e) => {
                         eprintln!("  Error parsing profile JSON: {}", e);
                         std::process::exit(1);

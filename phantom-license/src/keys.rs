@@ -57,15 +57,31 @@ fn master_key() -> [u8; 32] {
 
 /// HKDF-style derivation: subkey = HMAC-SHA256(master_key, purpose).
 /// Each subsystem gets a unique key; leaking one does not compromise
-/// the others.
+/// the others. The stack buffer holding the master key is
+/// volatile-zeroed the moment the HMAC is finalized, so it does not
+/// live on to be picked up by a core dump or a stack-scanner.
 pub fn derive_key(purpose: &[u8]) -> [u8; 32] {
-    let mk = master_key();
+    let mut mk = master_key();
     let mut mac = HmacSha256::new_from_slice(&mk).expect("HMAC key length is fixed");
     mac.update(purpose);
     let bytes = mac.finalize().into_bytes();
     let mut out = [0u8; 32];
     out.copy_from_slice(&bytes);
+    volatile_zero(&mut mk);
     out
+}
+
+/// Volatile write-zeros over a buffer. `write_volatile` prevents the
+/// compiler from optimizing the writes away as dead stores — plain
+/// `mk = [0; 32]` on a stack-local that goes out of scope compiles
+/// to nothing.
+fn volatile_zero(buf: &mut [u8]) {
+    for b in buf.iter_mut() {
+        unsafe { std::ptr::write_volatile(b, 0) };
+    }
+    // Compiler fence keeps the writes from being reordered past this
+    // point (they cannot cross a Release fence).
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
 }
 
 /// Current master key generation. Bumped in build.rs when the seed
@@ -154,5 +170,14 @@ mod tests {
             "XOR key had only {} distinct bytes across 32 positions",
             seen.len()
         );
+    }
+
+    // volatile_zero must actually zero its buffer, and must not be
+    // dead-code-eliminated the way a plain `= [0; N]` would be.
+    #[test]
+    fn volatile_zero_wipes_buffer() {
+        let mut buf = [0x5Au8; 32];
+        super::volatile_zero(&mut buf);
+        assert_eq!(buf, [0u8; 32]);
     }
 }

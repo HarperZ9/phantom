@@ -41,7 +41,12 @@ pub fn save_profile(profile: &HardwareProfile) -> std::io::Result<PathBuf> {
     let dir = ensure_profiles_dir()?;
     let filename = format!("{}.json", sanitize_filename(&profile.metadata.name));
     let path = dir.join(&filename);
-    let json = serde_json::to_string_pretty(profile)
+
+    // Sign the profile before writing. Callers pass a mark-less
+    // profile; we strip any existing mark for canonical hashing,
+    // compute the mark, then persist the marked form.
+    let signed = sign_profile(profile.clone());
+    let json = serde_json::to_string_pretty(&signed)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     fs::write(&path, json)?;
     Ok(path)
@@ -53,6 +58,74 @@ pub fn load_profile(name: &str) -> std::io::Result<HardwareProfile> {
     let path = dir.join(&filename);
     let json = fs::read_to_string(&path)?;
     serde_json::from_str(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+/// Verdict from checking a profile's origin mark against this machine.
+///
+/// `Unmarked` is a first-class outcome: pre-Sprint-14 profiles and
+/// hand-authored profiles legitimately have no mark. Callers decide
+/// what policy to apply per outcome (typically: import from another
+/// machine requires Pro or higher).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImportVerdict {
+    Unmarked,
+    Local,
+    Foreign { origin_tier: String },
+    ContentTampered,
+    Invalid,
+    Malformed,
+}
+
+/// Compute the canonical bytes a mark should cover: the profile
+/// serialized with `origin_mark` cleared. Any change to the profile
+/// content — even a re-indent — that a caller does before saving must
+/// be reflected here so `verify` sees the same hash both sides.
+fn canonical_bytes(profile: &HardwareProfile) -> Vec<u8> {
+    let mut stripped = profile.clone();
+    stripped.metadata.origin_mark = None;
+    serde_json::to_vec(&stripped).unwrap_or_default()
+}
+
+pub fn sign_profile(mut profile: HardwareProfile) -> HardwareProfile {
+    // Strip any prior mark so the hash is stable across re-signings.
+    profile.metadata.origin_mark = None;
+    let canonical = serde_json::to_vec(&profile).unwrap_or_default();
+    let guard = phantom_license::LicenseGuard::load();
+    let fp = phantom_license::MachineFingerprint::collect();
+    let tier = guard.tier().to_string();
+    // Rough issued-days marker; epoch-days precision is deliberate —
+    // marks are for provenance, not for expiration.
+    let issued_days = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| (d.as_secs() / 86400) as u32)
+        .unwrap_or(0);
+    let mark = phantom_license::watermark::sign_bytes(&canonical, fp.hash, &tier, issued_days);
+    profile.metadata.origin_mark = Some(mark);
+    profile
+}
+
+/// Verify a profile's origin mark against this machine's fingerprint.
+pub fn check_origin(profile: &HardwareProfile) -> ImportVerdict {
+    let Some(mark) = &profile.metadata.origin_mark else {
+        return ImportVerdict::Unmarked;
+    };
+    let canonical = canonical_bytes(profile);
+    let mut hasher = sha2::Sha256::new();
+    use sha2::Digest;
+    hasher.update(&canonical);
+    let mut profile_hash = [0u8; 32];
+    profile_hash.copy_from_slice(&hasher.finalize());
+
+    let fp = phantom_license::MachineFingerprint::collect();
+    match phantom_license::watermark::verify(mark, &profile_hash, &fp.hash) {
+        phantom_license::watermark::Verdict::Local => ImportVerdict::Local,
+        phantom_license::watermark::Verdict::Foreign { origin_tier } => {
+            ImportVerdict::Foreign { origin_tier }
+        }
+        phantom_license::watermark::Verdict::ContentTampered => ImportVerdict::ContentTampered,
+        phantom_license::watermark::Verdict::Invalid => ImportVerdict::Invalid,
+        phantom_license::watermark::Verdict::Malformed => ImportVerdict::Malformed,
+    }
 }
 
 pub fn list_profiles() -> std::io::Result<Vec<String>> {

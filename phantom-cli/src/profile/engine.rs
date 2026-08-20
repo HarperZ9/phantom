@@ -33,6 +33,9 @@ pub fn generate_profile(seed: &str, name: &str) -> HardwareProfile {
             seed: seed.to_string(),
             created_at: current_timestamp(),
             phantom_version: env!("CARGO_PKG_VERSION").to_string(),
+            // Marked on save, not at generation. Keeps engine
+            // free of license/fingerprint dependencies.
+            origin_mark: None,
         },
         smbios,
         disks,

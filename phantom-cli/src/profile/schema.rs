@@ -19,6 +19,12 @@ pub struct ProfileMetadata {
     pub seed: String,
     pub created_at: String,
     pub phantom_version: String,
+    /// Signed provenance mark. Present on every profile Phantom
+    /// generates starting Sprint 14. Absent on legacy or hand-authored
+    /// profiles; the CLI treats the absence as a legal "unmarked"
+    /// state, not as tampering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_mark: Option<phantom_license::watermark::OriginMark>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

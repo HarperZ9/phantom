@@ -4,6 +4,7 @@ pub mod integrity;
 pub mod key;
 pub(crate) mod keys;
 pub mod time_anchor;
+pub mod watermark;
 
 pub use fingerprint::MachineFingerprint;
 pub use guard::LicenseGuard;

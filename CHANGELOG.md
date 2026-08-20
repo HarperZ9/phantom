@@ -232,6 +232,69 @@ All notable changes to Phantom are documented here. Format follows
   transitions, forgery rejection, dedup, honey-key normalization,
   arbitrary-string negative).
 
+### Added — Sprint 20: license phone-home + investigator verifier
+- **`phantom_license::phone_home`** module implementing a fully
+  opt-in license callback. No baked-in vendor URL — the operator
+  (individual or enterprise) sets `phone_home_url` in the config;
+  unset means no calls ever. Payload contains only: opaque license
+  serial (HMAC hash, not the key), tier, phantom version, unix
+  seconds, tripwire counts, and a **proof-of-possession signature**
+  (HMAC-SHA256 keyed by the license key itself over the canonical
+  payload). No machine fingerprint, no IP-linkable data, no profile
+  content. Transport is `curl` via subprocess so the URL and body
+  are auditable in `ps` / audit logs and no HTTPS crate joins the
+  supply chain. Rate-limited to at most once per 24h via a signed
+  last-call file; fail-open on network errors; fail-closed only on
+  explicit `{"revoked": true}` response (which High-trips the
+  tripwire).
+- **`phantom-verify` binary** (new workspace member) for
+  vendor-side investigation of Phantom-generated evidence:
+  - `inspect <profile.json>` — dumps origin_mark fields (no
+    crypto).
+  - `verify <profile.json>` — verifies the HMAC on the mark,
+    reports `VALID` / `INVALID` / `UNMARKED` / `TAMPERED` /
+    `MALFORMED`. Exit code reflects verdict.
+  - `match <profile.json> --key <license-key>` — the primary
+    investigation flow. Given a suspect profile and a candidate
+    license key, reports whether that key produced this profile.
+    Uses the machine hash embedded in the license (signed by the
+    master, unforgeable) as the tie-back to the mark's
+    `origin_fingerprint_hex`.
+  - `serial --key <license-key>` — compute the opaque phone-home
+    serial that a given license would present. Correlates a
+    phone-home log entry back to a customer record.
+  Reads from a file path or `-` (stdin). Text output by default,
+  `--json` envelope for automation.
+
+### Design boundaries (Sprint 20 additions)
+- **Phone-home leaks no fingerprint.** Only an opaque HMAC serial
+  identifies the install to the endpoint. The endpoint must have
+  been previously issued this serial (via the license request
+  flow) to know which customer it maps to.
+- **`phantom-verify` is vendor-internal.** It carries the same
+  obfuscated master key as `phantom-cli`, so anyone who has the
+  binary can, in principle, extract the master key and forge marks.
+  Distribution should be limited to the vendor and specific
+  auditors under NDA. A follow-up sprint will migrate origin marks
+  from HMAC-SHA256 to Ed25519 signatures; at that point
+  `phantom-verify` can ship publicly with only the public key.
+- **No auto-reporting on tamper detection.** Tamper events remain
+  local to `<data_dir>/.tripwire`; the phone-home payload includes
+  only a count. The user must run `phantom tamper-report` themselves
+  to share detail.
+
+### Tests
+- 11 new `phone_home` cases: payload purity, deterministic opaque
+  serial, no-URL no-call, is-due interval, tampered last-call
+  falls back to due, URL stored only as hash, forged log dropped,
+  proof roundtrips, empty-proof rejection, field-tamper breaks
+  proof, per-time freshness.
+- 6 new `phantom-verify` integration tests: inspect prints fields,
+  verify prints VALID on marked, TAMPERED on hand-edited content,
+  JSON envelope validates, stdin path works, serial is
+  deterministic and distinct per key.
+- Total workspace: **190 tests** passing (up from 173).
+
 ## [0.5.0] — Sprint 10
 
 ### Added

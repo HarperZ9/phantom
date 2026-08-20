@@ -1,5 +1,12 @@
 [workspace]
-members = ["phantom-cli", "phantom-ipc", "phantom-license", "phantom-svc", "phantom-tray"]
+members = [
+    "phantom-cli",
+    "phantom-ipc",
+    "phantom-license",
+    "phantom-svc",
+    "phantom-tray",
+    "phantom-verify",
+]
 resolver = "2"
 
 [profile.release]

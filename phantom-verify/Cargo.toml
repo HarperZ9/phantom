@@ -1,0 +1,18 @@
+[package]
+name = "phantom-verify"
+version = "0.5.0"
+edition = "2021"
+description = "Vendor-side verifier for Phantom-generated origin marks"
+license = "Proprietary"
+
+[[bin]]
+name = "phantom-verify"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+phantom-cli = { path = "../phantom-cli" }
+phantom-license = { path = "../phantom-license" }

@@ -31,6 +31,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build release binaries
         run: cargo build --release --workspace --target ${{ matrix.target }}
+      # phantom-verify is deliberately NOT shipped in the public
+      # release archive — it's the vendor's investigation tool and
+      # carries the same master-key material as phantom-cli, so
+      # widening its distribution widens the reverse-engineering
+      # surface without helping any end user.
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-latest'
         shell: bash
@@ -38,7 +43,7 @@ jobs:
           mkdir -p dist
           cp target/${{ matrix.target }}/release/phantom-cli dist/phantom
           cp target/${{ matrix.target }}/release/phantom-svc dist/
-          cp LICENSE README.md dist/
+          cp LICENSE README.md CHANGELOG.md dist/
           tar -czf phantom-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C dist .
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'
@@ -52,6 +57,7 @@ jobs:
           }
           Copy-Item LICENSE dist/
           Copy-Item README.md dist/
+          Copy-Item CHANGELOG.md dist/
           Compress-Archive -Path dist/* -DestinationPath phantom-${{ github.ref_name }}-${{ matrix.target }}.zip
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

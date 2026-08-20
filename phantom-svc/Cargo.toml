@@ -1,6 +1,6 @@
 [package]
 name = "phantom-svc"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Phantom privacy service — background orchestrator"
 license = "Proprietary"

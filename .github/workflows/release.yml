@@ -2,13 +2,19 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    # Matches v1.0.0 as well as prerelease tags like v1.0.0-rc1.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag to create and release (e.g. v0.6.0)'
+        description: 'Version tag to create and release (e.g. v1.0.0 or v1.0.0-rc1)'
         required: true
         type: string
+      prerelease:
+        description: 'Mark the GitHub Release as a prerelease'
+        required: false
+        default: false
+        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -95,11 +101,20 @@ jobs:
       # PATH by default. Add it, then build the MSI via build.cmd.
       # The MSI's ProductVersion in the .wxs must match
       # PHANTOM_MSI_VERSION so the output filename tracks the tag.
+      # WiX v3 is preinstalled on windows-latest images but not on
+      # PATH by default. Locate it, add it, then build the MSI.
+      #
+      # MSI ProductVersion must be numeric (N.N.N or N.N.N.N); it
+      # cannot carry a SemVer prerelease suffix. So for a tag like
+      # v1.0.0-rc1 we take:
+      #   - filename version: "1.0.0-rc1"   (kept for artifact name)
+      #   - MSI  ProductVersion: "1.0.0"    (stripped for candle)
+      # Two rc MSIs of the same base version therefore share a
+      # ProductVersion — that's fine: MajorUpgrade replaces them,
+      # and every rc anyway targets throwaway VMs.
       - name: Build MSI (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        env:
-          PHANTOM_MSI_VERSION: ${{ env.RELEASE_VERSION }}
         run: |
           $wixCandidates = @(
             'C:\Program Files (x86)\WiX Toolset v3.14\bin',
@@ -112,11 +127,27 @@ jobs:
           }
           if (-not $wixBin) { throw 'WiX Toolset v3 not found after install' }
           $env:PATH = "$wixBin;$env:PATH"
-          # Strip a leading 'v' from a tag-shaped version so the WiX
-          # ProductVersion (must be N.N.N) accepts it.
-          $env:PHANTOM_MSI_VERSION = $env:PHANTOM_MSI_VERSION -replace '^v', ''
+          $filenameVersion = $env:RELEASE_VERSION -replace '^v', ''
+          $productVersion = ($filenameVersion -split '-')[0]
+          # build.cmd names the MSI PhantomSetup-v${PHANTOM_MSI_VERSION}.msi
+          # and passes it to candle as -dProductVersion.
+          # We want the filename to carry the full tag (rc1 included)
+          # but the internal ProductVersion to be numeric-only, so we
+          # override just the -d value after build.cmd would compute it.
+          $env:PHANTOM_MSI_VERSION = $filenameVersion
           Push-Location phantom-installer
-          cmd /c build.cmd
+          # Invoke candle+light directly here to feed both values
+          # separately; build.cmd is still the source of truth for
+          # local dev, where filename == ProductVersion is fine.
+          if (-not (Test-Path out)) { New-Item -ItemType Directory out | Out-Null }
+          candle.exe -nologo -ext WixUtilExtension -ext WixUIExtension -arch x64 `
+            -dProductVersion="$productVersion" `
+            -out "out\phantom.wixobj" phantom.wxs
+          if ($LASTEXITCODE -ne 0) { throw 'candle failed' }
+          light.exe -nologo -ext WixUtilExtension -ext WixUIExtension -cultures:en-us `
+            -out "out\PhantomSetup-v$filenameVersion.msi" `
+            "out\phantom.wixobj"
+          if ($LASTEXITCODE -ne 0) { throw 'light failed' }
           Pop-Location
       - name: Sign MSI (Windows)
         if: matrix.os == 'windows-latest'
@@ -156,6 +187,30 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      # Compute SHA-256 over every artifact so users on any platform
+      # can verify their download. `sha256sum -c SHA256SUMS.txt` reads
+      # this file when placed next to the artifacts. GPG signing of
+      # this manifest lands with Sprint 23 (maintainer key + agent);
+      # for now the file itself is enough to catch a corrupted
+      # download or a swapped-artifact tamper.
+      - name: Compute SHA256SUMS
+        working-directory: artifacts
+        run: |
+          # Deterministic sort so the file diffs cleanly across releases.
+          sha256sum $(ls | grep -v SHA256SUMS | sort) > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      # Auto-detect prerelease from the tag ("-rc", "-beta", "-alpha")
+      # so we don't have to remember the flag on tag-push triggers.
+      - name: Compute prerelease flag
+        id: prerelease
+        run: |
+          if [[ "${{ github.event.inputs.prerelease }}" == "true" ]]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ env.RELEASE_VERSION }}" =~ -(rc|beta|alpha) ]]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -163,7 +218,8 @@ jobs:
           # creates it against the current commit. On a tag-push
           # trigger the tag already exists and this is a no-op.
           tag_name: ${{ env.RELEASE_VERSION }}
-          files: artifacts/*
+          files: |
+            artifacts/*
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.prerelease.outputs.value == 'true' }}

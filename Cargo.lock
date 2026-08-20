@@ -283,7 +283,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "phantom-cli"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "phantom-ipc",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "phantom-ipc"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "phantom-license",
  "serde",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "phantom-license"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "hmac",
  "rand",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "phantom-svc"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "phantom-cli",
  "phantom-ipc",
@@ -334,14 +334,14 @@ dependencies = [
 
 [[package]]
 name = "phantom-tray"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "phantom-ipc",
 ]
 
 [[package]]
 name = "phantom-vendor-tools"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "phantom-license",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "phantom-verify"
-version = "0.6.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "phantom-cli",

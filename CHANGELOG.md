@@ -6,6 +6,117 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.0] — v1.0 GA
+
+**Phantom's first customer-facing release.** A Windows MSI installer,
+a signed release build, a live license issuance pipeline behind a
+Cloudflare Worker, and end-to-end docs covering purchase, install,
+activation, first profile, and clean uninstall. Everything below is
+new **on the v1.0 release path**; the underlying code work landed
+across Sprints 12–21 (see prior entries).
+
+### Added — Sprint 22 (Windows CI + Layer-2 validation)
+- Windows CI green on `test (windows-latest)` and
+  `release build (windows-latest)`. Fixes for winreg `&&String` deref
+  and phantom-tray gdi32/user32/shell32/advapi32 linker resolution.
+- `docs/windows-runbook.md`: minimum reproducible Layer-2 apply /
+  validate / revert flow on a fresh Windows image.
+
+### Added — Sprint 24 (master seed rotation)
+- `phantom-license/build.rs` sources the master seed from
+  `PHANTOM_MASTER_SEED` env var → workspace `.master_seed` file →
+  DEV placeholder (in that precedence). Release builds without a
+  real seed refuse to compile.
+- `MASTER_KEY_GEN` bumped to 2 for the production seed. Displayed by
+  `phantom self-check --json` so a QA can see which key material a
+  binary was baked with.
+- CI `release.yml` sets `PHANTOM_MASTER_SEED` from an organization
+  secret before every release build.
+- `docs/master-seed-rotation.md`: three-tier precedence, first-bake
+  procedure, and the "one-time-only pre-launch rotation" discipline.
+
+### Added — Sprint 25 (license issuance + phone-home endpoints)
+- **`phantom-vendor-tools`** (new binary crate, vendor-internal):
+  `issue` signs a new key for a customer fingerprint; `serial-of`
+  computes the phone-home serial for a key; `decode` dumps a key's
+  fields for support; `verify-callback` verifies a captured
+  phone-home payload against a candidate key.
+- **`endpoints/`** (new Cloudflare Worker project):
+  `POST /license/callback` — every install phones home every 24h;
+  worker rate-limits per serial (KV, 20/hr), looks up the serial in
+  D1, reconstructs the license key from the row + master seed,
+  verifies the proof-of-possession, updates `last_seen_at`, returns
+  `{ok, revoked}`. Fail-closed for revoked / expired / proof_invalid
+  / stale / unknown_serial / malformed; client fail-opens only for
+  network errors. `GET /health` for uptime monitoring.
+- D1 schema stores the constituent parts of a license, **not** the
+  key itself. A database dump exposes customer records but no
+  forgeable material.
+- `docs/api.md`: endpoint contract, revocation reasons, rate limits,
+  security posture.
+- `docs/issuance-workflow.md`: operator playbook (intake → issue →
+  wrangler d1 insert → deliver → revoke → investigate).
+
+### Added — Sprint 26 (signed MSI installer)
+- `phantom-installer/phantom.wxs` rewritten for v1: cut the deferred
+  Layer-1 driver components, consolidated the double-installed
+  phantom-svc.exe into a single component that owns both the file
+  and the ServiceInstall entry, MajorUpgrade preserves license and
+  config across binary swaps.
+- `phantom-installer/sign.cmd`: signs one PE or MSI target with the
+  vendor EV cert. No-ops (exit 0) when
+  `PHANTOM_SIGNING_CERT_B64` is unset so unsigned nightly/PR builds
+  still succeed.
+- Release CI signs the individual PE binaries **before** they are
+  packaged into the zip and the MSI; the MSI is then signed
+  separately. Both sign steps activate automatically when the two
+  cert secrets are set.
+- `docs/msi-install-runbook.md`: 8-section manual QA runbook — fresh
+  install (Win 10 + Win 11), basic operation, uninstall,
+  upgrade-preserves-license, reboot persistence, cleanup-actually-
+  reverts-layers (Sev-1 gate), downgrade refusal, cancel-mid-install
+  rollback.
+
+### Added — Sprint 27 (v1.0.0 GA rehearsal)
+- All workspace crates bumped 0.6.0 → 1.0.0. Installer's
+  `ProductVersion` and `build.cmd` default likewise.
+- Release workflow now handles prerelease tags (`v1.0.0-rc1` etc.):
+  the tag verbatim goes into artifact filenames, but the MSI's
+  numeric `ProductVersion` is stripped of any suffix. The GitHub
+  Release is marked prerelease automatically when the tag contains
+  `-rc`, `-beta`, or `-alpha`.
+- `SHA256SUMS.txt` is now generated in the release job over every
+  artifact and attached to the GitHub Release for user-side
+  integrity checks.
+- `docs/signature-verification.md`: end-user "verify the download
+  you just got" instructions covering `sha256sum -c` and
+  `signtool verify /pa` paths.
+- `docs/user/install.md`, `docs/user/activate.md`,
+  `docs/user/first-profile.md`, `docs/user/uninstall.md`:
+  the four user-facing pages that live on the product site.
+- `docs/rc1-dogfood.md`: 12-section integration rehearsal — download
+  and verify, install, request license, issue (vendor seat), activate,
+  apply profile, reboot persistence, revert, phone-home, opt-out,
+  revocation, uninstall.
+
+### Design boundaries carried into v1
+- **Layer 1 (kernel filter driver)** is deferred to v2 pending WHQL
+  attestation. The MSI does not install a driver. Layer 2
+  (user-mode registry spoofing) covers the identifier surface most
+  commercial software reads.
+- **Layer 0 (UEFI/DXE)** is deferred to v2/v3.
+- **Master seed rotation** is a one-time-only pre-launch event.
+  Post-launch rotation invalidates every issued license.
+- **No fingerprint on the wire**. The phone-home endpoint receives
+  an opaque serial and reconstructs the license key from D1
+  metadata + master seed to verify proof-of-possession. Customer
+  fingerprints never leave customer machines.
+- **Fail-closed server / fail-open client** — a customer with a
+  firewalled network keeps working; only an authenticated
+  `revoked: true` from the endpoint drops them to Free tier.
+
+## [Unreleased pre-v1.0]
+
 ### Added
 - Adversarial license-key fuzz test: every single-bit flip of a valid key
   is confirmed to fail HMAC verification (480 cases per run)

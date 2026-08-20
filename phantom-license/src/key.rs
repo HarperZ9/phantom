@@ -381,4 +381,78 @@ mod tests {
         assert_eq!(format!("{}", LicenseTier::Pro), "Pro");
         assert_eq!(format!("{}", LicenseTier::Enterprise), "Enterprise");
     }
+
+    // Adversarial: flip every single bit of a valid key's raw payload
+    // and confirm nothing survives HMAC verification. Guarantees the
+    // signature covers every byte and rules out any silent parse path
+    // that would accept a near-miss.
+    #[test]
+    fn every_single_bit_flip_is_rejected() {
+        let fp = test_fingerprint();
+        let key = generate_license_key(LicenseTier::Pro, &fp, 0);
+        let clean: String = key.chars().filter(|c| c.is_alphanumeric()).collect();
+        let raw = base32_decode(&clean).expect("valid base32");
+        assert_eq!(raw.len(), RAW_TOTAL_LEN);
+
+        for byte_idx in 0..raw.len() {
+            for bit in 0..8u8 {
+                let mut tampered = raw.clone();
+                tampered[byte_idx] ^= 1 << bit;
+                let encoded = base32_encode(&tampered);
+                if let Ok(license) = validate_license_key(&encoded) {
+                    // The only legitimate way a bit-flip yields Ok is if the
+                    // tampered bytes happen to re-produce an identical HMAC,
+                    // which is cryptographically impossible for SHA-256.
+                    panic!(
+                        "bit flip at byte {byte_idx} bit {bit} produced a valid \
+                         license: tier={:?} expires={}",
+                        license.tier, license.expires_epoch_days
+                    );
+                }
+            }
+        }
+    }
+
+    // Key must be at least the raw length. We truncate at each byte and
+    // confirm rejection to guard against a length-check regression
+    // opening up short-key attacks.
+    #[test]
+    fn truncated_keys_are_rejected() {
+        let fp = test_fingerprint();
+        let key = generate_license_key(LicenseTier::Pro, &fp, 0);
+        let clean: String = key.chars().filter(|c| c.is_alphanumeric()).collect();
+        for len in 1..clean.len() {
+            let truncated: String = clean.chars().take(len).collect();
+            assert!(
+                validate_license_key(&truncated).is_err(),
+                "truncated key of len {} was accepted",
+                len
+            );
+        }
+    }
+
+    // Whitespace and separator characters are stripped before decoding,
+    // so keys copy-pasted with newlines or extra dashes must still work.
+    #[test]
+    fn key_with_extra_whitespace_and_dashes_validates() {
+        let fp = test_fingerprint();
+        let key = generate_license_key(LicenseTier::Pro, &fp, 0);
+
+        let noisy = format!(
+            "  {}  \n\t---{}---\n",
+            &key[..key.len() / 2],
+            &key[key.len() / 2..]
+        );
+        assert!(validate_license_key(&noisy).is_ok());
+    }
+
+    // The signing key is a fixed compile-time secret. If someone were to
+    // swap it accidentally in a refactor, every previously-issued key
+    // would silently start failing — this pins the value so a review
+    // catches the change.
+    #[test]
+    fn signing_key_is_pinned() {
+        assert_eq!(SIGNING_KEY, b"phantom-license-hmac-v1-key");
+        assert_eq!(KEY_VERSION, 1);
+    }
 }

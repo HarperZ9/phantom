@@ -9,3 +9,10 @@
 # Master signing seed for local vendor builds. NEVER commit.
 # See docs/master-seed-rotation.md.
 .master_seed
+
+# Endpoints Worker: live wrangler.toml carries account_id + KV/D1
+# ids. Commit wrangler.toml.example instead.
+endpoints/wrangler.toml
+endpoints/node_modules
+endpoints/.wrangler
+endpoints/.dev.vars

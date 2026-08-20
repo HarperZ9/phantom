@@ -1,0 +1,24 @@
+# Copy to wrangler.toml and fill in the account-specific IDs.
+# wrangler.toml is git-ignored; wrangler.toml.example is the
+# template checked in.
+
+name = "phantom-licenses"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+
+# Uncomment and set once you have a custom domain:
+# routes = [
+#     { pattern = "api.phantom.dev/license/*", zone_name = "phantom.dev" },
+# ]
+
+[[d1_databases]]
+binding = "DB"                          # Access via env.DB in the Worker.
+database_name = "phantom-licenses"
+database_id = "REPLACE_WITH_D1_ID"      # From `wrangler d1 create`.
+
+[[kv_namespaces]]
+binding = "RATE_LIMITS"                 # Access via env.RATE_LIMITS.
+id = "REPLACE_WITH_KV_ID"               # From `wrangler kv:namespace create`.
+
+# Set the master seed via `wrangler secret put PHANTOM_MASTER_SEED`.
+# Never commit it. Same value as the client-side GitHub secret.

@@ -1,0 +1,16 @@
+[package]
+name = "phantom-vendor-tools"
+version = "0.6.0"
+edition = "2021"
+description = "Vendor-side license issuance + phone-home verification CLI"
+license = "Proprietary"
+
+[[bin]]
+name = "phantom-vendor"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+phantom-license = { path = "../phantom-license" }

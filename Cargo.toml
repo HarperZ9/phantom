@@ -5,6 +5,7 @@ members = [
     "phantom-license",
     "phantom-svc",
     "phantom-tray",
+    "phantom-vendor-tools",
     "phantom-verify",
 ]
 resolver = "2"

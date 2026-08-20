@@ -5,3 +5,7 @@
 *.dll
 *.sys
 *.efi
+
+# Master signing seed for local vendor builds. NEVER commit.
+# See docs/master-seed-rotation.md.
+.master_seed

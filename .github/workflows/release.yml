@@ -38,7 +38,13 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+      # Master signing seed for the license crate. Must be a
+      # 64-hex-char organization secret. If absent, the crate's
+      # build.rs fails the release build with a clear error —
+      # release binaries MUST NOT ship with the DEV placeholder.
       - name: Build release binaries
+        env:
+          PHANTOM_MASTER_SEED: ${{ secrets.PHANTOM_MASTER_SEED }}
         run: cargo build --release --workspace --target ${{ matrix.target }}
       # phantom-verify is deliberately NOT shipped in the public
       # release archive — it's the vendor's investigation tool and

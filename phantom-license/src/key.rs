@@ -457,22 +457,40 @@ mod tests {
         assert!(validate_license_key(&noisy).is_ok());
     }
 
-    // The derived signing key must stay stable across builds. If the
-    // master seed or the domain-separation string were to change, every
-    // previously-issued license would silently start failing — pinning
-    // its SHA-256 makes such a refactor fail loudly in CI without
-    // exposing the key itself in the source.
+    // The derived signing key must stay stable across builds on the
+    // DEV placeholder seed (generation 1). Release builds source the
+    // seed from PHANTOM_MASTER_SEED or the workspace .master_seed
+    // file (generation 2+); their derived subkey depends on the
+    // secret, cannot be pinned in source, and is verified separately
+    // in the release-build workflow.
+    //
+    // This test therefore only fires when the placeholder seed is
+    // active — Sprint 24 gate. It catches a refactor that would
+    // silently change the DEV subkey (invalidating every dev license
+    // and every test that assumes a fixed derivation).
     #[test]
-    fn derived_signing_key_is_pinned() {
+    fn derived_signing_key_is_pinned_for_dev_seed() {
+        if crate::keys::master_generation() != 1 {
+            // Non-dev seed in use; the pin doesn't apply. Nothing to
+            // check here — see the release-build verification job.
+            return;
+        }
         use sha2::Digest;
         let sk = license_signing_key();
         let digest = sha2::Sha256::digest(sk);
         let hex: String = digest.iter().map(|b| format!("{:02x}", b)).collect();
         assert_eq!(
             hex, "d1f19a1c7e6130266d3d4d438553f1fa22d0a2cf84698c99eb2cbc84db30d500",
-            "derived license signing key changed — this invalidates every issued license"
+            "DEV-seed derived license signing key changed — this invalidates every dev license"
         );
         assert_eq!(KEY_VERSION, 1);
-        assert_eq!(crate::keys::master_generation(), 1);
+    }
+
+    // Independent of the seed, the KEY_VERSION byte pins the license
+    // key wire format. Bumping it is a breaking change to every
+    // customer key; must be a deliberate, documented event.
+    #[test]
+    fn key_wire_version_pinned() {
+        assert_eq!(KEY_VERSION, 1);
     }
 }

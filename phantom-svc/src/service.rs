@@ -3,7 +3,7 @@ use crate::handler::PhantomHandler;
 #[cfg(windows)]
 use phantom_ipc::server::PhantomServer;
 #[cfg(windows)]
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(windows)]
 use std::sync::Arc;
 

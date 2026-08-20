@@ -13,6 +13,6 @@ path = "src/main.rs"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 phantom-cli = { path = "../phantom-cli" }
 phantom-license = { path = "../phantom-license" }

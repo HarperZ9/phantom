@@ -1,6 +1,6 @@
 use phantom_cli::json_out::{
     ConfigPayload, Envelope, LayerStatus, LicenseStatusPayload, MaxProfiles, ProfileListEntry,
-    StatusPayload, VersionPayload,
+    SelfCheckBuild, SelfCheckPayload, StatusPayload, VersionPayload,
 };
 use phantom_cli::{apply, audit, build_info, config, profile, validator};
 
@@ -77,6 +77,9 @@ enum Commands {
 
     /// Print detailed version and build information
     Version,
+
+    /// Report anti-tamper / integrity self-check status
+    SelfCheck,
 }
 
 #[derive(Subcommand)]
@@ -552,6 +555,13 @@ fn main() {
                     Ok(guard) => {
                         println!("  License activated: {} tier", guard.tier());
                     }
+                    Err(phantom_license::LicenseError::RateLimited(secs)) => {
+                        eprintln!(
+                            "  Rate-limited: too many failed attempts. Wait {} seconds and try again.",
+                            secs
+                        );
+                        std::process::exit(1);
+                    }
                     Err(e) => {
                         eprintln!("  Activation failed: {}", e);
                         std::process::exit(1);
@@ -819,6 +829,82 @@ fn main() {
                 .print();
             } else {
                 println!("{}", build_info::full_version_string());
+            }
+        }
+
+        Commands::SelfCheck => {
+            let debugger = phantom_license::integrity::detect_debugger();
+            let data_dir = profile::data_dir();
+
+            // Time anchor: 'ok' or 'rewound' or 'first-time'
+            let anchor_verdict = phantom_license::time_anchor::check_and_advance(&data_dir);
+            let anchor_str = match anchor_verdict {
+                phantom_license::time_anchor::AnchorVerdict::Ok => "ok",
+                phantom_license::time_anchor::AnchorVerdict::ClockRewound { .. } => "rewound",
+                phantom_license::time_anchor::AnchorVerdict::NoAnchor => "first-time",
+            };
+
+            // A successful LicenseGuard::load() implies state_mac
+            // verified AND time anchor was not rewound. We reproduce
+            // the check by loading and comparing tiers.
+            let guard = phantom_license::LicenseGuard::load();
+            let license_state_ok = guard.is_licensed() || !data_dir.join(".license.json").exists();
+
+            let cooldown = phantom_license::rate_limit::required_cooldown_secs(&data_dir);
+
+            let healthy = !debugger && anchor_str != "rewound" && license_state_ok;
+
+            if cli.json {
+                Envelope::ok(
+                    "self-check",
+                    SelfCheckPayload {
+                        healthy,
+                        debugger_detected: debugger,
+                        time_anchor: anchor_str,
+                        license_state_verified: license_state_ok,
+                        activation_cooldown_secs: cooldown,
+                        master_key_generation: phantom_license::master_key_generation(),
+                        build: SelfCheckBuild {
+                            version: build_info::VERSION,
+                            git_commit: build_info::GIT_COMMIT,
+                            target: build_info::BUILD_TARGET,
+                            profile: build_info::BUILD_PROFILE,
+                        },
+                    },
+                )
+                .print();
+            } else {
+                println!("\n  Phantom Self-Check\n  {}\n", "=".repeat(50));
+                println!(
+                    "  Overall:            {}",
+                    if healthy { "HEALTHY" } else { "DEGRADED" }
+                );
+                println!(
+                    "  Debugger detected:  {}",
+                    if debugger { "YES (!)" } else { "no" }
+                );
+                println!("  Time anchor:        {}", anchor_str);
+                println!(
+                    "  License state:      {}",
+                    if license_state_ok {
+                        "verified"
+                    } else {
+                        "tamper detected"
+                    }
+                );
+                println!("  Activation cooldown: {} sec", cooldown);
+                println!(
+                    "  Master key gen:     {}",
+                    phantom_license::master_key_generation()
+                );
+                println!(
+                    "  Build:              {}",
+                    build_info::full_version_string()
+                );
+                println!();
+                if !healthy {
+                    std::process::exit(1);
+                }
             }
         }
     }

@@ -84,6 +84,29 @@ All notable changes to Phantom are documented here. Format follows
 - `phantom_cli::profile::sign_profile`, `check_origin`, `ImportVerdict`
   helpers (used by `save_profile` and the CLI import handler)
 
+### Changed — Sprint 15: rate-limit + self-check
+- **Activation is rate-limited.** `LicenseGuard::activate()` consults
+  a HMAC-signed attempt log at `<data_dir>/.activation_attempts` before
+  exercising any key material. First 5 failed attempts within a rolling
+  1-hour window are free; each further failure earns an exponentially-
+  growing backoff (30s → 60s → 120s → ..., capped at 1h). Successful
+  activation clears the log; forged log entries fail MAC verification
+  and are discarded on load. Blocks feed-the-key-generator brute force.
+- **New `LicenseError::RateLimited(secs)` variant** surfaces the
+  required wait time to the CLI, which prints a human-readable message.
+
+### Added
+- `phantom self-check` subcommand: reports debugger detection, time
+  anchor state, license-state verification, activation cooldown,
+  master key generation, and full build info. Exits 1 when any check
+  fails. `--json` gives a machine-readable `SelfCheckPayload`.
+- `phantom_license::rate_limit` module (7 tests: no-history, free
+  window, sixth-attempt trigger, backoff cap, clear-on-success,
+  forged-entry rejection, MAC roundtrip).
+- `phantom_license::master_key_generation()` public accessor so
+  operators can confirm the master-key generation their binary was
+  built against without exposing key material.
+
 ## [0.5.0] — Sprint 10
 
 ### Added

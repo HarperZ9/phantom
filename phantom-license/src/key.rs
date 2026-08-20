@@ -121,6 +121,8 @@ pub enum LicenseError {
     InsufficientTier,
     #[error("unknown license tier code {0}")]
     UnknownTier(u8),
+    #[error("too many failed activation attempts; wait {0} seconds")]
+    RateLimited(u64),
 }
 
 // Key layout (37 bytes raw, before base32):

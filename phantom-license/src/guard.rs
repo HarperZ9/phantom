@@ -105,6 +105,37 @@ impl LicenseGuard {
     }
 
     pub fn activate(key_str: &str) -> Result<Self, LicenseError> {
+        let path = license_file_path();
+        let data_dir = path.parent().map(|p| p.to_path_buf());
+
+        // Rate-limit gate: consult the attempt log first so brute-force
+        // attempts are throttled before any key material is exercised.
+        if let Some(dir) = data_dir.as_deref() {
+            let cooldown = crate::rate_limit::required_cooldown_secs(dir);
+            if cooldown > 0 {
+                return Err(LicenseError::RateLimited(cooldown));
+            }
+        }
+
+        // Any failure below records into the attempt log; the rate
+        // limiter uses that to gate the *next* call.
+        let outcome = Self::try_activate_inner(key_str);
+        match &outcome {
+            Ok(_) => {
+                if let Some(dir) = data_dir.as_deref() {
+                    crate::rate_limit::clear(dir);
+                }
+            }
+            Err(_) => {
+                if let Some(dir) = data_dir.as_deref() {
+                    crate::rate_limit::record_failure(dir);
+                }
+            }
+        }
+        outcome
+    }
+
+    fn try_activate_inner(key_str: &str) -> Result<Self, LicenseError> {
         if !integrity::self_check() {
             return Err(LicenseError::InvalidSignature);
         }

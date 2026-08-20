@@ -99,3 +99,22 @@ pub struct VersionPayload {
     pub target: &'static str,
     pub profile: &'static str,
 }
+
+#[derive(Serialize)]
+pub struct SelfCheckPayload {
+    pub healthy: bool,
+    pub debugger_detected: bool,
+    pub time_anchor: &'static str,
+    pub license_state_verified: bool,
+    pub activation_cooldown_secs: u64,
+    pub master_key_generation: u8,
+    pub build: SelfCheckBuild,
+}
+
+#[derive(Serialize)]
+pub struct SelfCheckBuild {
+    pub version: &'static str,
+    pub git_commit: &'static str,
+    pub target: &'static str,
+    pub profile: &'static str,
+}

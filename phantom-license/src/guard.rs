@@ -1,7 +1,7 @@
 use crate::fingerprint::MachineFingerprint;
-use crate::key::{License, LicenseError, LicenseTier, validate_license_key};
 use crate::integrity;
-use serde::{Serialize, Deserialize};
+use crate::key::{validate_license_key, License, LicenseError, LicenseTier};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,8 +72,8 @@ impl LicenseGuard {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let json = serde_json::to_string_pretty(&stored)
-            .map_err(|_| LicenseError::InvalidFormat)?;
+        let json =
+            serde_json::to_string_pretty(&stored).map_err(|_| LicenseError::InvalidFormat)?;
         std::fs::write(&path, json).map_err(|_| LicenseError::InvalidFormat)?;
 
         Ok(LicenseGuard {

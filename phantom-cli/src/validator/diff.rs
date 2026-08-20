@@ -106,28 +106,70 @@ pub fn diff_sources(sources: &[SourceReadResult]) -> Vec<(String, String, String
 fn profile_to_identifier_map(profile: &HardwareProfile) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
 
-    map.insert("smbios.system_uuid".into(), profile.smbios.system_uuid.clone());
-    map.insert("smbios.board_serial".into(), profile.smbios.board_serial.clone());
-    map.insert("smbios.board_manufacturer".into(), profile.smbios.board_manufacturer.clone());
-    map.insert("smbios.board_product".into(), profile.smbios.board_product.clone());
-    map.insert("smbios.system_serial".into(), profile.smbios.system_serial.clone());
-    map.insert("smbios.system_manufacturer".into(), profile.smbios.system_manufacturer.clone());
-    map.insert("smbios.system_product".into(), profile.smbios.system_product.clone());
-    map.insert("smbios.chassis_serial".into(), profile.smbios.chassis_serial.clone());
-    map.insert("smbios.chassis_asset_tag".into(), profile.smbios.chassis_asset_tag.clone());
-    map.insert("smbios.bios_vendor".into(), profile.smbios.bios_vendor.clone());
-    map.insert("smbios.bios_version".into(), profile.smbios.bios_version.clone());
+    map.insert(
+        "smbios.system_uuid".into(),
+        profile.smbios.system_uuid.clone(),
+    );
+    map.insert(
+        "smbios.board_serial".into(),
+        profile.smbios.board_serial.clone(),
+    );
+    map.insert(
+        "smbios.board_manufacturer".into(),
+        profile.smbios.board_manufacturer.clone(),
+    );
+    map.insert(
+        "smbios.board_product".into(),
+        profile.smbios.board_product.clone(),
+    );
+    map.insert(
+        "smbios.system_serial".into(),
+        profile.smbios.system_serial.clone(),
+    );
+    map.insert(
+        "smbios.system_manufacturer".into(),
+        profile.smbios.system_manufacturer.clone(),
+    );
+    map.insert(
+        "smbios.system_product".into(),
+        profile.smbios.system_product.clone(),
+    );
+    map.insert(
+        "smbios.chassis_serial".into(),
+        profile.smbios.chassis_serial.clone(),
+    );
+    map.insert(
+        "smbios.chassis_asset_tag".into(),
+        profile.smbios.chassis_asset_tag.clone(),
+    );
+    map.insert(
+        "smbios.bios_vendor".into(),
+        profile.smbios.bios_vendor.clone(),
+    );
+    map.insert(
+        "smbios.bios_version".into(),
+        profile.smbios.bios_version.clone(),
+    );
 
     for (i, disk) in profile.disks.iter().enumerate() {
         map.insert(format!("disk.{}.serial", i), disk.serial.clone());
         map.insert(format!("disk.{}.model", i), disk.model.clone());
-        map.insert(format!("disk.{}.firmware_rev", i), disk.firmware_rev.clone());
-        map.insert(format!("disk.{}.volume_serial", i), disk.volume_serial.clone());
+        map.insert(
+            format!("disk.{}.firmware_rev", i),
+            disk.firmware_rev.clone(),
+        );
+        map.insert(
+            format!("disk.{}.volume_serial", i),
+            disk.volume_serial.clone(),
+        );
         map.insert(format!("disk.{}.volume_guid", i), disk.volume_guid.clone());
     }
 
     for (i, nic) in profile.network_adapters.iter().enumerate() {
-        map.insert(format!("nic.{}.permanent_mac", i), nic.permanent_mac.clone());
+        map.insert(
+            format!("nic.{}.permanent_mac", i),
+            nic.permanent_mac.clone(),
+        );
         map.insert(format!("nic.{}.current_mac", i), nic.current_mac.clone());
         map.insert(format!("nic.{}.adapter_guid", i), nic.adapter_guid.clone());
     }
@@ -136,32 +178,62 @@ fn profile_to_identifier_map(profile: &HardwareProfile) -> BTreeMap<String, Stri
         map.insert(format!("gpu.{}.vendor_id", i), gpu.vendor_id.clone());
         map.insert(format!("gpu.{}.device_id", i), gpu.device_id.clone());
         map.insert(format!("gpu.{}.subsystem_id", i), gpu.subsystem_id.clone());
-        map.insert(format!("gpu.{}.pnp_instance_id", i), gpu.pnp_instance_id.clone());
-        map.insert(format!("gpu.{}.driver_key_guid", i), gpu.driver_key_guid.clone());
+        map.insert(
+            format!("gpu.{}.pnp_instance_id", i),
+            gpu.pnp_instance_id.clone(),
+        );
+        map.insert(
+            format!("gpu.{}.driver_key_guid", i),
+            gpu.driver_key_guid.clone(),
+        );
     }
 
     if let Some(ref tpm) = profile.tpm {
         map.insert("tpm.manufacturer_id".into(), tpm.manufacturer_id.clone());
-        map.insert("tpm.manufacturer_name".into(), tpm.manufacturer_name.clone());
+        map.insert(
+            "tpm.manufacturer_name".into(),
+            tpm.manufacturer_name.clone(),
+        );
         map.insert("tpm.spec_version".into(), tpm.spec_version.clone());
     }
 
     for (i, display) in profile.displays.iter().enumerate() {
-        map.insert(format!("display.{}.manufacturer_code", i), display.manufacturer_code.clone());
-        map.insert(format!("display.{}.product_code", i), display.product_code.clone());
-        map.insert(format!("display.{}.serial_number", i), display.serial_number.clone());
-        map.insert(format!("display.{}.manufacture_year", i), display.manufacture_year.to_string());
+        map.insert(
+            format!("display.{}.manufacturer_code", i),
+            display.manufacturer_code.clone(),
+        );
+        map.insert(
+            format!("display.{}.product_code", i),
+            display.product_code.clone(),
+        );
+        map.insert(
+            format!("display.{}.serial_number", i),
+            display.serial_number.clone(),
+        );
+        map.insert(
+            format!("display.{}.manufacture_year", i),
+            display.manufacture_year.to_string(),
+        );
     }
 
     map.insert("os.machine_guid".into(), profile.os.machine_guid.clone());
-    map.insert("os.hw_profile_guid".into(), profile.os.hw_profile_guid.clone());
+    map.insert(
+        "os.hw_profile_guid".into(),
+        profile.os.hw_profile_guid.clone(),
+    );
     map.insert("os.machine_id".into(), profile.os.machine_id.clone());
     map.insert("os.product_id".into(), profile.os.product_id.clone());
     map.insert("os.computer_name".into(), profile.os.computer_name.clone());
-    map.insert("os.install_date".into(), profile.os.install_date.to_string());
+    map.insert(
+        "os.install_date".into(),
+        profile.os.install_date.to_string(),
+    );
 
     map.insert("boot.bcd_guid".into(), profile.boot.bcd_guid.clone());
-    map.insert("boot.disk_signature".into(), profile.boot.disk_signature.clone());
+    map.insert(
+        "boot.disk_signature".into(),
+        profile.boot.disk_signature.clone(),
+    );
 
     map
 }
@@ -215,9 +287,12 @@ mod tests {
     fn identifier_map_count_matches_profile() {
         let profile = generate_profile("diff-count", "test");
         let map = profile_to_identifier_map(&profile);
-        assert!(map.len() >= profile.identifier_count() - 5,
+        assert!(
+            map.len() >= profile.identifier_count() - 5,
             "map has {} entries, profile reports {} identifiers",
-            map.len(), profile.identifier_count());
+            map.len(),
+            profile.identifier_count()
+        );
     }
 
     #[test]

@@ -58,9 +58,7 @@ impl SerialCharset {
                 const CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
                 CHARS[rng.gen_range(0..CHARS.len())] as char
             }
-            SerialCharset::Numeric => {
-                (b'0' + rng.gen_range(0..10u8)) as char
-            }
+            SerialCharset::Numeric => (b'0' + rng.gen_range(0..10u8)) as char,
             SerialCharset::HexUpper => {
                 const CHARS: &[u8] = b"0123456789ABCDEF";
                 CHARS[rng.gen_range(0..CHARS.len())] as char
@@ -262,11 +260,7 @@ pub static NIC_VENDORS: &[NicVendor] = &[
     NicVendor {
         manufacturer: "Qualcomm",
         adapter_name_prefix: "Qualcomm Atheros",
-        oui_prefixes: &[
-            [0x00, 0x03, 0x7F],
-            [0x28, 0xC6, 0x3F],
-            [0x9C, 0xB7, 0x0D],
-        ],
+        oui_prefixes: &[[0x00, 0x03, 0x7F], [0x28, 0xC6, 0x3F], [0x9C, 0xB7, 0x0D]],
     },
 ];
 
@@ -361,7 +355,13 @@ pub static DISPLAY_VENDORS: &[DisplayVendor] = &[
 ];
 
 pub static COMPUTER_NAME_ADJECTIVES: &[&str] = &[
-    "DESKTOP", "WORKSTATION", "PC", "HOME", "OFFICE", "LAB", "DEV",
+    "DESKTOP",
+    "WORKSTATION",
+    "PC",
+    "HOME",
+    "OFFICE",
+    "LAB",
+    "DEV",
 ];
 
 pub static PRODUCT_ID_PREFIXES: &[&str] = &[

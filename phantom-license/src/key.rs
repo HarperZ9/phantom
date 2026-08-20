@@ -1,8 +1,8 @@
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
-use serde::{Serialize, Deserialize};
-use thiserror::Error;
 use crate::fingerprint::MachineFingerprint;
+use hmac::{Hmac, Mac};
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use thiserror::Error;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -257,8 +257,8 @@ mod tests {
 
     fn test_fingerprint() -> MachineFingerprint {
         MachineFingerprint::from_bytes(&[
-            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-            0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
         ])
     }
 

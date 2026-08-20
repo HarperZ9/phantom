@@ -7,12 +7,19 @@ const VALUE_NAME: &str = "PhantomTray";
 pub fn install() -> Result<(), String> {
     extern "system" {
         fn RegOpenKeyExA(
-            hKey: isize, lpSubKey: *const u8, ulOptions: u32,
-            samDesired: u32, phkResult: *mut isize,
+            hKey: isize,
+            lpSubKey: *const u8,
+            ulOptions: u32,
+            samDesired: u32,
+            phkResult: *mut isize,
         ) -> i32;
         fn RegSetValueExA(
-            hKey: isize, lpValueName: *const u8, reserved: u32,
-            dwType: u32, lpData: *const u8, cbData: u32,
+            hKey: isize,
+            lpValueName: *const u8,
+            reserved: u32,
+            dwType: u32,
+            lpData: *const u8,
+            cbData: u32,
         ) -> i32;
         fn RegCloseKey(hKey: isize) -> i32;
         fn GetModuleFileNameA(hModule: isize, lpFilename: *mut u8, nSize: u32) -> u32;
@@ -69,8 +76,11 @@ pub fn install() -> Result<(), String> {
 pub fn remove() -> Result<(), String> {
     extern "system" {
         fn RegOpenKeyExA(
-            hKey: isize, lpSubKey: *const u8, ulOptions: u32,
-            samDesired: u32, phkResult: *mut isize,
+            hKey: isize,
+            lpSubKey: *const u8,
+            ulOptions: u32,
+            samDesired: u32,
+            phkResult: *mut isize,
         ) -> i32;
         fn RegDeleteValueA(hKey: isize, lpValueName: *const u8) -> i32;
         fn RegCloseKey(hKey: isize) -> i32;
@@ -84,7 +94,13 @@ pub fn remove() -> Result<(), String> {
 
     let mut hkey: isize = 0;
     let result = unsafe {
-        RegOpenKeyExA(HKEY_CURRENT_USER, key_str.as_ptr(), 0, KEY_SET_VALUE, &mut hkey)
+        RegOpenKeyExA(
+            HKEY_CURRENT_USER,
+            key_str.as_ptr(),
+            0,
+            KEY_SET_VALUE,
+            &mut hkey,
+        )
     };
     if result != 0 {
         return Err(format!("failed to open registry key: error {}", result));

@@ -1,7 +1,7 @@
 use rand::Rng;
-use rand_chacha::ChaCha20Rng;
 use rand::SeedableRng;
-use sha2::{Sha256, Digest};
+use rand_chacha::ChaCha20Rng;
+use sha2::{Digest, Sha256};
 
 use super::schema::*;
 use super::vendor_db::*;
@@ -65,11 +65,17 @@ fn generate_uuid<R: Rng>(rng: &mut R) -> String {
         u16::from_be_bytes([bytes[4], bytes[5]]),
         u16::from_be_bytes([bytes[6], bytes[7]]),
         u16::from_be_bytes([bytes[8], bytes[9]]),
-        u64::from_be_bytes([0, 0, bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]),
+        u64::from_be_bytes([
+            0, 0, bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        ]),
     )
 }
 
-fn generate_smbios<R: Rng>(vendor: &BoardVendor, system_uuid: &str, rng: &mut R) -> SmbiosIdentifiers {
+fn generate_smbios<R: Rng>(
+    vendor: &BoardVendor,
+    system_uuid: &str,
+    rng: &mut R,
+) -> SmbiosIdentifiers {
     let product = vendor.products[rng.gen_range(0..vendor.products.len())];
     let board_serial = generate_serial(
         vendor.serial_prefix,
@@ -105,7 +111,10 @@ fn generate_smbios<R: Rng>(vendor: &BoardVendor, system_uuid: &str, rng: &mut R)
         system_manufacturer: vendor.manufacturer.to_string(),
         system_product: product.to_string(),
         chassis_serial,
-        chassis_asset_tag: format!("Asset-{}", generate_serial("", 6, SerialCharset::Numeric, rng)),
+        chassis_asset_tag: format!(
+            "Asset-{}",
+            generate_serial("", 6, SerialCharset::Numeric, rng)
+        ),
         bios_vendor: vendor.bios_vendor.to_string(),
         bios_version,
     }
@@ -128,11 +137,7 @@ fn generate_disks<R: Rng>(vendor: &DiskVendor, rng: &mut R) -> Vec<DiskIdentifie
                 SerialCharset::AlphaNumeric,
                 rng,
             );
-            let volume_serial = format!(
-                "{:04X}-{:04X}",
-                rng.gen::<u16>(),
-                rng.gen::<u16>(),
-            );
+            let volume_serial = format!("{:04X}-{:04X}", rng.gen::<u16>(), rng.gen::<u16>(),);
             let volume_guid = generate_uuid(rng);
 
             DiskIdentifiers {
@@ -160,14 +165,17 @@ fn generate_nics<R: Rng>(vendor: &NicVendor, rng: &mut R) -> Vec<NetworkIdentifi
 
             let mac = format!(
                 "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                mac_bytes[0], mac_bytes[1], mac_bytes[2],
-                mac_bytes[3], mac_bytes[4], mac_bytes[5],
+                mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5],
             );
 
             let adapter_name = if i == 0 {
                 format!("{} Family Controller", vendor.adapter_name_prefix)
             } else {
-                format!("{} Family Controller #{}", vendor.adapter_name_prefix, i + 1)
+                format!(
+                    "{} Family Controller #{}",
+                    vendor.adapter_name_prefix,
+                    i + 1
+                )
             };
 
             NetworkIdentifiers {
@@ -283,7 +291,10 @@ pub fn current_timestamp() -> String {
     let s = time_secs % 60;
 
     let (y, m, d) = days_to_ymd(days);
-    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, hours, mins, s)
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y, m, d, hours, mins, s
+    )
 }
 
 fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
@@ -327,7 +338,10 @@ mod tests {
         assert_eq!(p1.smbios.system_uuid, p2.smbios.system_uuid);
         assert_eq!(p1.smbios.board_serial, p2.smbios.board_serial);
         assert_eq!(p1.os.machine_guid, p2.os.machine_guid);
-        assert_eq!(p1.network_adapters[0].permanent_mac, p2.network_adapters[0].permanent_mac);
+        assert_eq!(
+            p1.network_adapters[0].permanent_mac,
+            p2.network_adapters[0].permanent_mac
+        );
     }
 
     #[test]
@@ -374,7 +388,10 @@ mod tests {
             assert!(!disk.serial.is_empty());
             assert!(!disk.model.is_empty());
             assert!(!disk.firmware_rev.is_empty());
-            assert!(disk.volume_serial.contains('-'), "volume serial should be XXXX-XXXX");
+            assert!(
+                disk.volume_serial.contains('-'),
+                "volume serial should be XXXX-XXXX"
+            );
         }
     }
 
@@ -461,6 +478,10 @@ mod tests {
     fn identifier_count_covers_all_fields() {
         let p = generate_profile("count-test", "test");
         let count = p.identifier_count();
-        assert!(count >= 30, "expected at least 30 identifiers, got {}", count);
+        assert!(
+            count >= 30,
+            "expected at least 30 identifiers, got {}",
+            count
+        );
     }
 }

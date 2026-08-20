@@ -182,15 +182,56 @@ phantom-svc --uninstall
 
 ## Configuration
 
-Phantom supports enterprise configuration via environment variables:
+Phantom resolves runtime configuration in this order (highest wins):
+
+1. Process environment variables (`PHANTOM_*`)
+2. JSON config file at `$PHANTOM_CONFIG` or `<data_dir>/config.json`
+3. Compiled defaults
+
+### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PHANTOM_DATA_DIR` | `%APPDATA%\phantom` (Win) / `~/.config/phantom` (Linux) | Base data directory for profiles, logs, config, and license state |
 | `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named pipe endpoint for IPC |
 | `PHANTOM_LOG_LEVEL` | `info` | Log verbosity (`trace`, `debug`, `info`, `warn`, `error`). Takes priority over `RUST_LOG` |
+| `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate location for the JSON config file |
+| `PHANTOM_TELEMETRY` | `false` | Enable/disable opt-in telemetry (`on`/`off`/`1`/`0`) |
 
-Enterprise deployments can set `PHANTOM_DATA_DIR` to a shared or managed path (e.g. `C:\ProgramData\Phantom`) for centralized profile and log storage.
+### Config file
+
+```bash
+# Write a default config
+phantom config init
+
+# Show the resolved config (env > file > defaults)
+phantom config show
+
+# Update a single key
+phantom config set log_level debug
+
+# Print the file path being used
+phantom config path
+```
+
+The file is plain JSON, hand-editable, and safe to commit into a
+configuration management system (SCCM, GPO, Ansible, container image).
+Enterprise deployments can drop a `config.json` into a managed
+`PHANTOM_DATA_DIR` for centralized rollout.
+
+### Machine-readable output
+
+Every read-heavy command accepts `--json` to emit a stable envelope for
+scripting:
+
+```bash
+phantom --json status
+phantom --json license status
+phantom --json config show
+phantom --json profile list
+```
+
+The envelope is `{ok, command, data | error}` — check `ok` first.
 
 ## Project Status
 
@@ -218,6 +259,10 @@ Enterprise deployments can set `PHANTOM_DATA_DIR` to a shared or managed path (e
 - [x] License system (HMAC-SHA256 keys, machine-bound activation, tier-gated layer access)
 - [x] Anti-tamper (debugger detection, binary integrity checks, constant-time comparison)
 - [x] Enterprise config (PHANTOM_DATA_DIR, PHANTOM_PIPE_NAME, centralized deployment)
+- [x] JSON config file with env-var override precedence (`phantom config` subcommands)
+- [x] Machine-readable `--json` output for status, license, config, profile list
+- [x] GitHub Actions CI (fmt, clippy, cross-platform build+test, cargo-audit)
+- [x] Release workflow (tagged releases → Linux + Windows binary artifacts)
 
 ## License
 

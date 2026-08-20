@@ -166,7 +166,10 @@ fn get_smbios_string(strings: &[String], index: u8) -> String {
     if index == 0 {
         return String::new();
     }
-    strings.get((index - 1) as usize).cloned().unwrap_or_default()
+    strings
+        .get((index - 1) as usize)
+        .cloned()
+        .unwrap_or_default()
 }
 
 #[allow(dead_code)]
@@ -280,7 +283,10 @@ fn read_smbios_source() -> SourceReadResult {
             ids.insert("smbios.board_manufacturer".into(), table.board_manufacturer);
             ids.insert("smbios.board_product".into(), table.board_product);
             ids.insert("smbios.system_serial".into(), table.system_serial);
-            ids.insert("smbios.system_manufacturer".into(), table.system_manufacturer);
+            ids.insert(
+                "smbios.system_manufacturer".into(),
+                table.system_manufacturer,
+            );
             ids.insert("smbios.system_product".into(), table.system_product);
             ids.insert("smbios.chassis_serial".into(), table.chassis_serial);
             ids.insert("smbios.chassis_asset_tag".into(), table.chassis_asset_tag);
@@ -312,26 +318,51 @@ fn read_registry_source() -> SourceReadResult {
     let mut errors = Vec::new();
 
     let string_keys = [
-        ("os.machine_guid", r"SOFTWARE\Microsoft\Cryptography", "MachineGuid"),
-        ("os.hw_profile_guid", r"SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001", "HwProfileGuid"),
-        ("os.product_id", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductId"),
-        ("os.machine_id", r"SOFTWARE\Microsoft\SQMClient", "MachineId"),
+        (
+            "os.machine_guid",
+            r"SOFTWARE\Microsoft\Cryptography",
+            "MachineGuid",
+        ),
+        (
+            "os.hw_profile_guid",
+            r"SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001",
+            "HwProfileGuid",
+        ),
+        (
+            "os.product_id",
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+            "ProductId",
+        ),
+        (
+            "os.machine_id",
+            r"SOFTWARE\Microsoft\SQMClient",
+            "MachineId",
+        ),
     ];
 
     for (id_key, reg_path, value_name) in &string_keys {
         match read_registry_string(reg_path, value_name) {
-            Ok(val) => { ids.insert((*id_key).into(), val); }
+            Ok(val) => {
+                ids.insert((*id_key).into(), val);
+            }
             Err(e) => errors.push(format!("Registry {}\\{}: {}", reg_path, value_name, e)),
         }
     }
 
-    match read_registry_dword(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "InstallDate") {
-        Ok(val) => { ids.insert("os.install_date".into(), val.to_string()); }
+    match read_registry_dword(
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+        "InstallDate",
+    ) {
+        Ok(val) => {
+            ids.insert("os.install_date".into(), val.to_string());
+        }
         Err(e) => errors.push(format!("Registry InstallDate: {}", e)),
     }
 
     match read_computer_name() {
-        Ok(name) => { ids.insert("os.computer_name".into(), name); }
+        Ok(name) => {
+            ids.insert("os.computer_name".into(), name);
+        }
         Err(e) => errors.push(format!("ComputerName: {}", e)),
     }
 
@@ -361,19 +392,26 @@ fn read_disk_source() -> SourceReadResult {
             for (i, disk) in disks.iter().enumerate() {
                 ids.insert(format!("disk.{}.serial", i), disk.serial.clone());
                 ids.insert(format!("disk.{}.model", i), disk.model.clone());
-                ids.insert(format!("disk.{}.firmware_rev", i), disk.firmware_rev.clone());
+                ids.insert(
+                    format!("disk.{}.firmware_rev", i),
+                    disk.firmware_rev.clone(),
+                );
             }
         }
         Err(e) => errors.push(format!("Disk enumeration: {}", e)),
     }
 
     match read_volume_serial() {
-        Ok(serial) => { ids.insert("disk.0.volume_serial".into(), serial); }
+        Ok(serial) => {
+            ids.insert("disk.0.volume_serial".into(), serial);
+        }
         Err(e) => errors.push(format!("Volume serial: {}", e)),
     }
 
     match read_volume_guid() {
-        Ok(guid) => { ids.insert("disk.0.volume_guid".into(), guid); }
+        Ok(guid) => {
+            ids.insert("disk.0.volume_guid".into(), guid);
+        }
         Err(e) => errors.push(format!("Volume GUID: {}", e)),
     }
 
@@ -401,9 +439,18 @@ fn read_network_source() -> SourceReadResult {
     match read_network_adapters() {
         Ok(adapters) => {
             for (i, adapter) in adapters.iter().enumerate() {
-                ids.insert(format!("nic.{}.permanent_mac", i), adapter.permanent_mac.clone());
-                ids.insert(format!("nic.{}.current_mac", i), adapter.current_mac.clone());
-                ids.insert(format!("nic.{}.adapter_guid", i), adapter.adapter_guid.clone());
+                ids.insert(
+                    format!("nic.{}.permanent_mac", i),
+                    adapter.permanent_mac.clone(),
+                );
+                ids.insert(
+                    format!("nic.{}.current_mac", i),
+                    adapter.current_mac.clone(),
+                );
+                ids.insert(
+                    format!("nic.{}.adapter_guid", i),
+                    adapter.adapter_guid.clone(),
+                );
             }
         }
         Err(e) => errors.push(format!("Network enumeration: {}", e)),
@@ -436,8 +483,14 @@ fn read_gpu_source() -> SourceReadResult {
                 ids.insert(format!("gpu.{}.vendor_id", i), gpu.vendor_id.clone());
                 ids.insert(format!("gpu.{}.device_id", i), gpu.device_id.clone());
                 ids.insert(format!("gpu.{}.subsystem_id", i), gpu.subsystem_id.clone());
-                ids.insert(format!("gpu.{}.pnp_instance_id", i), gpu.pnp_instance_id.clone());
-                ids.insert(format!("gpu.{}.driver_key_guid", i), gpu.driver_key_guid.clone());
+                ids.insert(
+                    format!("gpu.{}.pnp_instance_id", i),
+                    gpu.pnp_instance_id.clone(),
+                );
+                ids.insert(
+                    format!("gpu.{}.driver_key_guid", i),
+                    gpu.driver_key_guid.clone(),
+                );
             }
         }
         Err(e) => errors.push(format!("GPU enumeration: {}", e)),
@@ -467,10 +520,22 @@ fn read_display_source() -> SourceReadResult {
     match read_display_devices() {
         Ok(displays) => {
             for (i, display) in displays.iter().enumerate() {
-                ids.insert(format!("display.{}.manufacturer_code", i), display.manufacturer_code.clone());
-                ids.insert(format!("display.{}.product_code", i), display.product_code.clone());
-                ids.insert(format!("display.{}.serial_number", i), display.serial_number.clone());
-                ids.insert(format!("display.{}.manufacture_year", i), display.manufacture_year.to_string());
+                ids.insert(
+                    format!("display.{}.manufacturer_code", i),
+                    display.manufacturer_code.clone(),
+                );
+                ids.insert(
+                    format!("display.{}.product_code", i),
+                    display.product_code.clone(),
+                );
+                ids.insert(
+                    format!("display.{}.serial_number", i),
+                    display.serial_number.clone(),
+                );
+                ids.insert(
+                    format!("display.{}.manufacture_year", i),
+                    display.manufacture_year.to_string(),
+                );
             }
         }
         Err(e) => errors.push(format!("Display enumeration: {}", e)),
@@ -750,11 +815,7 @@ fn read_volume_serial() -> Result<String, String> {
 fn read_volume_guid() -> Result<String, String> {
     let mut buf = vec![0u8; 50];
     let ok = unsafe {
-        GetVolumeNameForVolumeMountPointA(
-            b"C:\\\0".as_ptr(),
-            buf.as_mut_ptr(),
-            buf.len() as u32,
-        )
+        GetVolumeNameForVolumeMountPointA(b"C:\\\0".as_ptr(), buf.as_mut_ptr(), buf.len() as u32)
     };
     if ok != 0 {
         let s = String::from_utf8_lossy(&buf);
@@ -786,7 +847,9 @@ fn read_network_adapters() -> Result<Vec<RawNetworkInfo>, String> {
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let class_key = hklm
-        .open_subkey(r"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}")
+        .open_subkey(
+            r"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}",
+        )
         .map_err(|e| format!("cannot open network class key: {}", e))?;
 
     let mut adapters = Vec::new();
@@ -1062,11 +1125,8 @@ mod tests {
     #[test]
     fn smbios_parser_system_entry() {
         let uuid_bytes: [u8; 16] = [
-            0x78, 0x56, 0x34, 0x12,
-            0xBC, 0x9A,
-            0xF0, 0xDE,
-            0x11, 0x22,
-            0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+            0x78, 0x56, 0x34, 0x12, 0xBC, 0x9A, 0xF0, 0xDE, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88,
         ];
         let mut data_bytes: Vec<u8> = vec![1, 2, 3, 4];
         data_bytes.extend_from_slice(&uuid_bytes);
@@ -1096,7 +1156,11 @@ mod tests {
 
     #[test]
     fn smbios_parser_chassis_entry() {
-        let chassis = build_smbios_entry(3, &[1, 2, 3, 4, 5], &["ChassisMfr", "t", "v3", "CSRL", "ASSET1"]);
+        let chassis = build_smbios_entry(
+            3,
+            &[1, 2, 3, 4, 5],
+            &["ChassisMfr", "t", "v3", "CSRL", "ASSET1"],
+        );
         let end = build_smbios_entry(127, &[], &[]);
         let buf = build_smbios_buffer(&[chassis, end]);
 
@@ -1112,7 +1176,11 @@ mod tests {
         sys_data.extend_from_slice(&[0u8; 16]);
         let system = build_smbios_entry(1, &sys_data, &["Dell", "PowerEdge", "v1", "ABC123"]);
         let board = build_smbios_entry(2, &[1, 2, 3, 4], &["Dell", "0XYZ", "v2", "BSN456"]);
-        let chassis = build_smbios_entry(3, &[1, 2, 3, 4, 5], &["Dell", "t", "v3", "CSN789", "ASSET0"]);
+        let chassis = build_smbios_entry(
+            3,
+            &[1, 2, 3, 4, 5],
+            &["Dell", "t", "v3", "CSN789", "ASSET0"],
+        );
         let end = build_smbios_entry(127, &[], &[]);
         let buf = build_smbios_buffer(&[bios, system, board, chassis, end]);
 
@@ -1132,11 +1200,8 @@ mod tests {
     #[test]
     fn smbios_uuid_mixed_endian() {
         let bytes: [u8; 16] = [
-            0x01, 0x02, 0x03, 0x04,
-            0x05, 0x06,
-            0x07, 0x08,
-            0x09, 0x0A,
-            0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
         ];
         let uuid = format_smbios_uuid(&bytes);
         assert_eq!(uuid, "04030201-0605-0807-090A-0B0C0D0E0F10");

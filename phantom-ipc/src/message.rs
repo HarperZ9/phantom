@@ -123,9 +123,7 @@ mod tests {
                 name: "gen".into(),
                 seed: "seed".into(),
             },
-            Request::DeleteProfile {
-                name: "del".into(),
-            },
+            Request::DeleteProfile { name: "del".into() },
             Request::Shutdown,
         ];
 
@@ -171,9 +169,7 @@ mod tests {
                 name: "new".into(),
                 identifiers: 32,
             },
-            Response::Deleted {
-                name: "old".into(),
-            },
+            Response::Deleted { name: "old".into() },
             Response::Ok {
                 message: "done".into(),
             },
@@ -207,7 +203,10 @@ mod tests {
 
     #[test]
     fn error_code_display() {
-        assert_eq!(format!("{}", ErrorCode::ProfileNotFound), "PROFILE_NOT_FOUND");
+        assert_eq!(
+            format!("{}", ErrorCode::ProfileNotFound),
+            "PROFILE_NOT_FOUND"
+        );
         assert_eq!(format!("{}", ErrorCode::InternalError), "INTERNAL_ERROR");
     }
 }

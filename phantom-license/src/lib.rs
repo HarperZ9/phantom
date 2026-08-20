@@ -1,8 +1,8 @@
 pub mod fingerprint;
-pub mod key;
-pub mod integrity;
 pub mod guard;
+pub mod integrity;
+pub mod key;
 
-pub use key::{License, LicenseTier, LicenseError, validate_license_key};
 pub use fingerprint::MachineFingerprint;
 pub use guard::LicenseGuard;
+pub use key::{validate_license_key, License, LicenseError, LicenseTier};

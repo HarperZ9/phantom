@@ -128,8 +128,11 @@ impl PhantomHandler {
             })
             .collect();
 
-        self.state
-            .set_protected(profile_name.to_string(), applied_layer_nums.clone(), total_applied);
+        self.state.set_protected(
+            profile_name.to_string(),
+            applied_layer_nums.clone(),
+            total_applied,
+        );
 
         Response::Applied {
             layers_applied: applied_layer_nums,
@@ -279,7 +282,11 @@ impl RequestHandler for PhantomHandler {
             }
         };
 
-        if let Response::Error { ref code, ref message } = response {
+        if let Response::Error {
+            ref code,
+            ref message,
+        } = response
+        {
             tracing::warn!(code = %code, message = %message, "request failed");
         }
 
@@ -330,7 +337,13 @@ mod tests {
             profile_name: "nonexistent-profile-xyz".into(),
             layers: vec![2],
         });
-        assert!(matches!(resp, Response::Error { code: ErrorCode::ProfileNotFound, .. }));
+        assert!(matches!(
+            resp,
+            Response::Error {
+                code: ErrorCode::ProfileNotFound,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -342,7 +355,10 @@ mod tests {
         });
         match resp {
             Response::Error { code, .. } => {
-                assert!(matches!(code, ErrorCode::InvalidRequest | ErrorCode::ProfileNotFound));
+                assert!(matches!(
+                    code,
+                    ErrorCode::InvalidRequest | ErrorCode::ProfileNotFound
+                ));
             }
             _ => panic!("expected Error"),
         }
@@ -354,7 +370,13 @@ mod tests {
         let resp = handler.handle(Request::GetProfile {
             name: "nonexistent-xyz".into(),
         });
-        assert!(matches!(resp, Response::Error { code: ErrorCode::ProfileNotFound, .. }));
+        assert!(matches!(
+            resp,
+            Response::Error {
+                code: ErrorCode::ProfileNotFound,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -363,7 +385,13 @@ mod tests {
         let resp = handler.handle(Request::DeleteProfile {
             name: "nonexistent-xyz".into(),
         });
-        assert!(matches!(resp, Response::Error { code: ErrorCode::ProfileNotFound, .. }));
+        assert!(matches!(
+            resp,
+            Response::Error {
+                code: ErrorCode::ProfileNotFound,
+                ..
+            }
+        ));
     }
 
     #[test]

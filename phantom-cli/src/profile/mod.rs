@@ -1,6 +1,6 @@
+pub mod engine;
 pub mod schema;
 pub mod vendor_db;
-pub mod engine;
 
 use schema::HardwareProfile;
 use std::fs;
@@ -52,8 +52,7 @@ pub fn load_profile(name: &str) -> std::io::Result<HardwareProfile> {
     let filename = format!("{}.json", sanitize_filename(name));
     let path = dir.join(&filename);
     let json = fs::read_to_string(&path)?;
-    serde_json::from_str(&json)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    serde_json::from_str(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 pub fn list_profiles() -> std::io::Result<Vec<String>> {
@@ -77,8 +76,22 @@ pub fn list_profiles() -> std::io::Result<Vec<String>> {
 
 fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
+}
+
+// Shared serialization gate for tests that mutate the process-global
+// environment table. The config module's tests live in the same test
+// binary and need to hold the same lock.
+static ENV_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub fn env_test_mutex() -> &'static std::sync::Mutex<()> {
+    &ENV_TEST_MUTEX
 }
 
 #[cfg(test)]
@@ -90,11 +103,16 @@ mod tests {
 
     fn unique_test_dir() -> PathBuf {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        std::env::temp_dir().join(format!("phantom-test-profile-{}-{}", std::process::id(), id))
+        std::env::temp_dir().join(format!(
+            "phantom-test-profile-{}-{}",
+            std::process::id(),
+            id
+        ))
     }
 
     #[test]
     fn data_dir_and_subdirs_with_filesystem_ops() {
+        let _g = env_test_mutex().lock().unwrap();
         let dir = unique_test_dir();
         std::env::set_var("PHANTOM_DATA_DIR", dir.to_str().unwrap());
 

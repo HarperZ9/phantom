@@ -1,7 +1,7 @@
 use tracing_subscriber::fmt;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 pub fn init(console: bool) {
     let log_dir = phantom_cli::profile::logs_dir();

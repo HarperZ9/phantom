@@ -80,9 +80,7 @@ impl PhantomServer {
             };
 
             if pipe_handle == INVALID_HANDLE_VALUE {
-                return Err(ServerError::BindFailed(
-                    "CreateNamedPipeA failed".into(),
-                ));
+                return Err(ServerError::BindFailed("CreateNamedPipeA failed".into()));
             }
 
             let connected = unsafe { ConnectNamedPipe(pipe_handle, std::ptr::null_mut()) };
@@ -96,8 +94,7 @@ impl PhantomServer {
             }
 
             if connected != 0 || std::io::Error::last_os_error().raw_os_error() == Some(535) {
-                let mut stream =
-                    crate::transport::PipeStream::from_handle(pipe_handle, false);
+                let mut stream = crate::transport::PipeStream::from_handle(pipe_handle, false);
 
                 match protocol::receive::<_, Request>(&mut stream) {
                     Ok(request) => {

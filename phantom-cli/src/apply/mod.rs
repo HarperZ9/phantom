@@ -1,6 +1,6 @@
-pub mod registry;
 pub mod driver_ipc;
 pub mod firmware;
+pub mod registry;
 
 use crate::profile::schema::HardwareProfile;
 
@@ -37,31 +37,32 @@ pub fn parse_layers(input: &str) -> Result<Vec<Layer>, String> {
     Ok(layers)
 }
 
-pub fn apply_profile(profile: &HardwareProfile, layers: &[Layer]) -> Vec<(Layer, Result<registry::ApplyResult, String>)> {
+pub fn apply_profile(
+    profile: &HardwareProfile,
+    layers: &[Layer],
+) -> Vec<(Layer, Result<registry::ApplyResult, String>)> {
     let mut results = Vec::new();
 
     for layer in layers {
         let result = match layer {
-            Layer::Firmware => {
-                match firmware::install_dxe_module(profile) {
-                    Ok(()) => Ok(registry::ApplyResult {
-                        applied: vec!["SMBIOS profile written to EFI variable (applies on next boot)".into()],
-                        failed: vec![],
-                        skipped: vec![],
-                    }),
-                    Err(e) => Err(e),
-                }
-            }
-            Layer::Kernel => {
-                match driver_ipc::send_profile_to_driver(profile) {
-                    Ok(()) => Ok(registry::ApplyResult {
-                        applied: vec!["Kernel profile loaded".into()],
-                        failed: vec![],
-                        skipped: vec![],
-                    }),
-                    Err(e) => Err(e),
-                }
-            }
+            Layer::Firmware => match firmware::install_dxe_module(profile) {
+                Ok(()) => Ok(registry::ApplyResult {
+                    applied: vec![
+                        "SMBIOS profile written to EFI variable (applies on next boot)".into(),
+                    ],
+                    failed: vec![],
+                    skipped: vec![],
+                }),
+                Err(e) => Err(e),
+            },
+            Layer::Kernel => match driver_ipc::send_profile_to_driver(profile) {
+                Ok(()) => Ok(registry::ApplyResult {
+                    applied: vec!["Kernel profile loaded".into()],
+                    failed: vec![],
+                    skipped: vec![],
+                }),
+                Err(e) => Err(e),
+            },
             Layer::Userland => Ok(registry::apply_registry_layer(profile)),
         };
         results.push((*layer, result));
@@ -75,7 +76,10 @@ pub fn revert_all() -> Vec<(Layer, Result<registry::ApplyResult, String>)> {
 
     match registry::load_backup() {
         Ok(backup) => {
-            results.push((Layer::Userland, Ok(registry::revert_registry_layer(&backup))));
+            results.push((
+                Layer::Userland,
+                Ok(registry::revert_registry_layer(&backup)),
+            ));
         }
         Err(e) => {
             results.push((Layer::Userland, Err(format!("No backup found: {}", e))));
@@ -85,13 +89,13 @@ pub fn revert_all() -> Vec<(Layer, Result<registry::ApplyResult, String>)> {
     let driver_status = driver_ipc::check_driver();
     if driver_status.loaded {
         match driver_ipc::clear_driver_profile() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => results.push((Layer::Kernel, Err(e))),
         }
     }
 
     match firmware::remove_dxe_module() {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {} // silently ignore — no firmware variable is the normal state
     }
 
@@ -102,23 +106,21 @@ pub fn status() -> Vec<(Layer, String)> {
     let mut statuses = Vec::new();
 
     let fw = firmware::check_firmware();
-    statuses.push((
-        Layer::Firmware,
-        firmware::format_firmware_status(&fw),
-    ));
+    statuses.push((Layer::Firmware, firmware::format_firmware_status(&fw)));
 
     let drv = driver_ipc::check_driver();
-    statuses.push((
-        Layer::Kernel,
-        driver_ipc::format_driver_status(&drv),
-    ));
+    statuses.push((Layer::Kernel, driver_ipc::format_driver_status(&drv)));
 
     let has_backup = registry::load_backup().is_ok();
     statuses.push((
         Layer::Userland,
         format!(
             "Registry backup: {}",
-            if has_backup { "present (profile applied)" } else { "none (original state)" },
+            if has_backup {
+                "present (profile applied)"
+            } else {
+                "none (original state)"
+            },
         ),
     ));
 

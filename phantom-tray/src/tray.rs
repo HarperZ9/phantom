@@ -74,9 +74,18 @@ const CMD_PROFILE_BASE: usize = 2000;
 extern "system" {
     fn RegisterClassExA(wc: *const WndClassExA) -> u16;
     fn CreateWindowExA(
-        ex_style: u32, class: *const u8, name: *const u8, style: u32,
-        x: i32, y: i32, w: i32, h: i32,
-        parent: isize, menu: isize, instance: isize, param: *mut u8,
+        ex_style: u32,
+        class: *const u8,
+        name: *const u8,
+        style: u32,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        parent: isize,
+        menu: isize,
+        instance: isize,
+        param: *mut u8,
     ) -> isize;
     fn DefWindowProcA(hwnd: isize, msg: u32, wp: usize, lp: isize) -> isize;
     fn DestroyWindow(hwnd: isize) -> i32;
@@ -90,8 +99,13 @@ extern "system" {
     fn CreatePopupMenu() -> isize;
     fn AppendMenuA(menu: isize, flags: u32, id: usize, text: *const u8) -> i32;
     fn TrackPopupMenu(
-        menu: isize, flags: u32, x: i32, y: i32,
-        reserved: i32, hwnd: isize, rect: *const u8,
+        menu: isize,
+        flags: u32,
+        x: i32,
+        y: i32,
+        reserved: i32,
+        hwnd: isize,
+        rect: *const u8,
     ) -> i32;
     fn DestroyMenu(menu: isize) -> i32;
     fn SetForegroundWindow(hwnd: isize) -> i32;
@@ -233,8 +247,14 @@ pub fn run() {
             TRAY_CLASS.as_ptr(),
             b"Phantom\0".as_ptr(),
             0,
-            0, 0, 0, 0,
-            0, 0, instance, std::ptr::null_mut(),
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            instance,
+            std::ptr::null_mut(),
         );
         if hwnd == 0 {
             eprintln!("  Failed to create message window.");
@@ -242,13 +262,19 @@ pub fn run() {
         }
 
         let icon_green = icons::create_hicon(&icons::shield_rgba(
-            icons::GREEN.0, icons::GREEN.1, icons::GREEN.2,
+            icons::GREEN.0,
+            icons::GREEN.1,
+            icons::GREEN.2,
         ));
         let icon_grey = icons::create_hicon(&icons::shield_rgba(
-            icons::GREY.0, icons::GREY.1, icons::GREY.2,
+            icons::GREY.0,
+            icons::GREY.1,
+            icons::GREY.2,
         ));
         let icon_amber = icons::create_hicon(&icons::shield_rgba(
-            icons::AMBER.0, icons::AMBER.1, icons::AMBER.2,
+            icons::AMBER.0,
+            icons::AMBER.1,
+            icons::AMBER.2,
         ));
 
         let app = Box::new(TrayApp {
@@ -433,9 +459,7 @@ fn poll_service() {
                             "Identity protected with profile '{}'",
                             app.status.active_profile.as_deref().unwrap_or("?")
                         );
-                        toast::show(
-                            app.hwnd, TRAY_ICON_ID, "Phantom", &msg, ToastIcon::Info,
-                        );
+                        toast::show(app.hwnd, TRAY_ICON_ID, "Phantom", &msg, ToastIcon::Info);
                     }
                 }
                 Err(_) => {
@@ -490,9 +514,7 @@ fn on_right_click(hwnd: isize) {
 
     if app.connected {
         if let Ok(mut client) = phantom_ipc::client::PhantomClient::connect() {
-            if let Ok(Response::Profiles { list }) =
-                client.request(&Request::ListProfiles)
-            {
+            if let Ok(Response::Profiles { list }) = client.request(&Request::ListProfiles) {
                 app.profile_names = list.iter().map(|p| p.name.clone()).collect();
             }
         }
@@ -521,11 +543,7 @@ fn on_right_click(hwnd: isize) {
         if app.connected && !app.profile_names.is_empty() {
             let submenu = CreatePopupMenu();
             for (i, name) in app.profile_names.iter().enumerate() {
-                let active = app
-                    .status
-                    .active_profile
-                    .as_deref()
-                    == Some(name.as_str());
+                let active = app.status.active_profile.as_deref() == Some(name.as_str());
                 let flags = MF_STRING | if active { MF_CHECKED } else { 0 };
                 let label = format!("{}\0", name);
                 AppendMenuA(submenu, flags, CMD_PROFILE_BASE + i, label.as_ptr());
@@ -587,7 +605,8 @@ fn on_menu_command(cmd: usize, hwnd: isize) {
                     match client.request(&Request::Unprotect) {
                         Ok(Response::Reverted { .. }) => {
                             toast::show(
-                                app.hwnd, TRAY_ICON_ID,
+                                app.hwnd,
+                                TRAY_ICON_ID,
                                 "Phantom",
                                 "Identity protection disabled. Hardware identity exposed.",
                                 ToastIcon::Warning,
@@ -596,8 +615,11 @@ fn on_menu_command(cmd: usize, hwnd: isize) {
                         }
                         Ok(Response::Error { message, .. }) => {
                             toast::show(
-                                app.hwnd, TRAY_ICON_ID,
-                                "Phantom", &message, ToastIcon::Error,
+                                app.hwnd,
+                                TRAY_ICON_ID,
+                                "Phantom",
+                                &message,
+                                ToastIcon::Error,
                             );
                         }
                         _ => {}
@@ -638,14 +660,16 @@ fn do_protect(profile_name: &str) {
                     layers_applied.len(),
                     identifiers
                 );
-                toast::show(
-                    app.hwnd, TRAY_ICON_ID, "Phantom", &msg, ToastIcon::Info,
-                );
+                toast::show(app.hwnd, TRAY_ICON_ID, "Phantom", &msg, ToastIcon::Info);
                 poll_service();
             }
             Ok(Response::Error { message, .. }) => {
                 toast::show(
-                    app.hwnd, TRAY_ICON_ID, "Phantom", &message, ToastIcon::Error,
+                    app.hwnd,
+                    TRAY_ICON_ID,
+                    "Phantom",
+                    &message,
+                    ToastIcon::Error,
                 );
             }
             _ => {}

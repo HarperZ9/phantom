@@ -4,7 +4,7 @@ use phantom_ipc::message::ServiceStatus;
 pub struct PopupData {
     pub protected: bool,
     pub profile: String,
-    pub layer_status: [(& 'static str, LayerState); 3],
+    pub layer_status: [(&'static str, LayerState); 3],
     pub identifier_count: usize,
     pub uptime: String,
 }
@@ -106,9 +106,18 @@ const POPUP_CLASS: &[u8] = b"PhantomPopup\0";
 extern "system" {
     fn RegisterClassExA(wc: *const WndClassExA) -> u16;
     fn CreateWindowExA(
-        ex_style: u32, class: *const u8, name: *const u8, style: u32,
-        x: i32, y: i32, w: i32, h: i32,
-        parent: isize, menu: isize, instance: isize, param: *mut u8,
+        ex_style: u32,
+        class: *const u8,
+        name: *const u8,
+        style: u32,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        parent: isize,
+        menu: isize,
+        instance: isize,
+        param: *mut u8,
     ) -> isize;
     fn ShowWindow(hwnd: isize, cmd: i32) -> i32;
     fn DestroyWindow(hwnd: isize) -> i32;
@@ -125,9 +134,19 @@ extern "system" {
     fn TextOutA(hdc: isize, x: i32, y: i32, s: *const u8, len: i32) -> i32;
     fn SelectObject(hdc: isize, obj: isize) -> isize;
     fn CreateFontA(
-        h: i32, w: i32, esc: i32, orient: i32, weight: i32,
-        italic: u32, underline: u32, strike: u32, charset: u32,
-        out_prec: u32, clip_prec: u32, quality: u32, pitch_family: u32,
+        h: i32,
+        w: i32,
+        esc: i32,
+        orient: i32,
+        weight: i32,
+        italic: u32,
+        underline: u32,
+        strike: u32,
+        charset: u32,
+        out_prec: u32,
+        clip_prec: u32,
+        quality: u32,
+        pitch_family: u32,
         face: *const u8,
     ) -> isize;
     fn SetForegroundWindow(hwnd: isize) -> i32;
@@ -314,13 +333,37 @@ fn paint_status(hdc: isize, hwnd: isize) {
 
     let font_bold = unsafe {
         CreateFontA(
-            16, 0, 0, 0, FW_BOLD, 0, 0, 0, 0, 0, 0, 0, 0,
+            16,
+            0,
+            0,
+            0,
+            FW_BOLD,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             b"Segoe UI\0".as_ptr(),
         )
     };
     let font_normal = unsafe {
         CreateFontA(
-            14, 0, 0, 0, FW_NORMAL, 0, 0, 0, 0, 0, 0, 0, 0,
+            14,
+            0,
+            0,
+            0,
+            FW_NORMAL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             b"Segoe UI\0".as_ptr(),
         )
     };

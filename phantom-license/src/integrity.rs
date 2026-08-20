@@ -1,4 +1,4 @@
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 pub struct IntegrityCheck {
     expected_hash: [u8; 32],
@@ -6,7 +6,9 @@ pub struct IntegrityCheck {
 
 impl IntegrityCheck {
     pub fn new(expected: [u8; 32]) -> Self {
-        IntegrityCheck { expected_hash: expected }
+        IntegrityCheck {
+            expected_hash: expected,
+        }
     }
 
     pub fn verify_region(&self, data: &[u8]) -> bool {

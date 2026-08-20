@@ -1,5 +1,5 @@
-use crate::validator::sources;
 use crate::validator::report;
+use crate::validator::sources;
 
 pub fn run_audit() {
     println!("\n  Reading hardware identifiers...\n");

@@ -104,9 +104,10 @@ impl PhantomClient {
     pub fn ping(&mut self) -> Result<u32, ClientError> {
         match self.request(&Request::Ping)? {
             Response::Pong { version } => Ok(version),
-            Response::Error { message, .. } => {
-                Err(ClientError::ProtocolError(format!("ping failed: {}", message)))
-            }
+            Response::Error { message, .. } => Err(ClientError::ProtocolError(format!(
+                "ping failed: {}",
+                message
+            ))),
             _ => Err(ClientError::ProtocolError("unexpected response".into())),
         }
     }
@@ -114,18 +115,15 @@ impl PhantomClient {
     pub fn status(&mut self) -> Result<crate::message::ServiceStatus, ClientError> {
         match self.request(&Request::GetStatus)? {
             Response::Status(s) => Ok(s),
-            Response::Error { message, .. } => {
-                Err(ClientError::ProtocolError(format!("status failed: {}", message)))
-            }
+            Response::Error { message, .. } => Err(ClientError::ProtocolError(format!(
+                "status failed: {}",
+                message
+            ))),
             _ => Err(ClientError::ProtocolError("unexpected response".into())),
         }
     }
 
-    pub fn protect(
-        &mut self,
-        profile_name: &str,
-        layers: &[u8],
-    ) -> Result<Response, ClientError> {
+    pub fn protect(&mut self, profile_name: &str, layers: &[u8]) -> Result<Response, ClientError> {
         self.request(&Request::Protect {
             profile_name: profile_name.into(),
             layers: layers.to_vec(),

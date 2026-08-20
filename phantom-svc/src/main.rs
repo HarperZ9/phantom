@@ -86,8 +86,11 @@ fn remove_tray_autostart() {
     {
         extern "system" {
             fn RegOpenKeyExA(
-                hKey: isize, lpSubKey: *const u8, ulOptions: u32,
-                samDesired: u32, phkResult: *mut isize,
+                hKey: isize,
+                lpSubKey: *const u8,
+                ulOptions: u32,
+                samDesired: u32,
+                phkResult: *mut isize,
             ) -> i32;
             fn RegDeleteValueA(hKey: isize, lpValueName: *const u8) -> i32;
             fn RegCloseKey(hKey: isize) -> i32;

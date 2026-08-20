@@ -122,11 +122,7 @@ extern "system" {
         lpServiceStartName: *const u8,
         lpPassword: *const u8,
     ) -> isize;
-    fn OpenServiceA(
-        hSCManager: isize,
-        lpServiceName: *const u8,
-        dwDesiredAccess: u32,
-    ) -> isize;
+    fn OpenServiceA(hSCManager: isize, lpServiceName: *const u8, dwDesiredAccess: u32) -> isize;
     fn DeleteService(hService: isize) -> i32;
     fn CloseServiceHandle(hSCObject: isize) -> i32;
     fn GetModuleFileNameA(hModule: isize, lpFilename: *mut u8, nSize: u32) -> u32;
@@ -327,11 +323,16 @@ fn install_windows_service() {
 
     if svc == 0 {
         eprintln!("Failed to create service. It may already exist.");
-        unsafe { CloseServiceHandle(scm); }
+        unsafe {
+            CloseServiceHandle(scm);
+        }
         std::process::exit(1);
     }
 
-    println!("  Service '{}' installed successfully.", SERVICE_DISPLAY_NAME);
+    println!(
+        "  Service '{}' installed successfully.",
+        SERVICE_DISPLAY_NAME
+    );
     println!("  Start with: sc start {}", SERVICE_NAME);
 
     unsafe {
@@ -355,7 +356,9 @@ fn uninstall_windows_service() {
 
     if svc == 0 {
         eprintln!("Service '{}' not found.", SERVICE_NAME);
-        unsafe { CloseServiceHandle(scm); }
+        unsafe {
+            CloseServiceHandle(scm);
+        }
         std::process::exit(1);
     }
 

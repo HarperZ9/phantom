@@ -23,7 +23,10 @@ pub fn apply_registry_layer(profile: &HardwareProfile) -> ApplyResult {
         let _ = profile;
         ApplyResult {
             applied: Vec::new(),
-            failed: vec![("registry".into(), "Registry spoofing requires Windows".into())],
+            failed: vec![(
+                "registry".into(),
+                "Registry spoofing requires Windows".into(),
+            )],
             skipped: Vec::new(),
         }
     }
@@ -84,8 +87,7 @@ pub fn save_backup(backup: &RegistryBackup) -> std::io::Result<()> {
 pub fn load_backup() -> std::io::Result<RegistryBackup> {
     let path = backup_path();
     let json = std::fs::read_to_string(&path)?;
-    serde_json::from_str(&json)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    serde_json::from_str(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 #[cfg(windows)]
@@ -199,15 +201,13 @@ fn revert_registry_windows(backup: &RegistryBackup) -> ApplyResult {
 
     for entry in &backup.entries {
         match hklm.open_subkey_with_flags(&entry.path, KEY_ALL_ACCESS) {
-            Ok(key) => {
-                match key.set_value(&entry.value_name, &entry.original_value) {
-                    Ok(_) => applied.push(format!("{}\\{}", entry.path, entry.value_name)),
-                    Err(e) => failed.push((
-                        format!("{}\\{}", entry.path, entry.value_name),
-                        e.to_string(),
-                    )),
-                }
-            }
+            Ok(key) => match key.set_value(&entry.value_name, &entry.original_value) {
+                Ok(_) => applied.push(format!("{}\\{}", entry.path, entry.value_name)),
+                Err(e) => failed.push((
+                    format!("{}\\{}", entry.path, entry.value_name),
+                    e.to_string(),
+                )),
+            },
             Err(e) => failed.push((
                 format!("{}\\{}", entry.path, entry.value_name),
                 e.to_string(),

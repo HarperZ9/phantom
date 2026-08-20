@@ -68,7 +68,11 @@ pub fn format_driver_status(status: &DriverStatus) -> String {
     }
     format!(
         "Driver: loaded | Profile: {} | Filters: {} disk, {} nic, {} gpu | Intercepted: {}",
-        if status.profile_active { "active" } else { "inactive" },
+        if status.profile_active {
+            "active"
+        } else {
+            "inactive"
+        },
         status.attached_disk_count,
         status.attached_nic_count,
         status.attached_gpu_count,
@@ -136,7 +140,10 @@ fn serialize_kernel_profile(profile: &HardwareProfile) -> Result<Vec<u8>, String
             push_u16(&mut buf, did);
             push_u32(&mut buf, subsys);
             push_fixed_str(&mut buf, &gpu.pnp_instance_id, MAX_MODEL_LEN);
-            push_u32(&mut buf, gpu.pnp_instance_id.len().min(MAX_MODEL_LEN) as u32);
+            push_u32(
+                &mut buf,
+                gpu.pnp_instance_id.len().min(MAX_MODEL_LEN) as u32,
+            );
         } else {
             let empty_gpu_size = 2 + 2 + 4 + MAX_MODEL_LEN + 4;
             buf.extend(std::iter::repeat(0u8).take(empty_gpu_size));
@@ -226,10 +233,16 @@ mod tests {
         let display_count = u32::from_le_bytes([blob[24], blob[25], blob[26], blob[27]]);
 
         assert_eq!(disk_count as usize, profile.disks.len().min(MAX_DISKS));
-        assert_eq!(nic_count as usize, profile.network_adapters.len().min(MAX_NICS));
+        assert_eq!(
+            nic_count as usize,
+            profile.network_adapters.len().min(MAX_NICS)
+        );
         assert_eq!(gpu_count as usize, profile.gpus.len().min(MAX_GPUS));
         assert_eq!(has_tpm, if profile.tpm.is_some() { 1 } else { 0 });
-        assert_eq!(display_count as usize, profile.displays.len().min(MAX_DISPLAYS));
+        assert_eq!(
+            display_count as usize,
+            profile.displays.len().min(MAX_DISPLAYS)
+        );
     }
 
     #[test]
@@ -312,10 +325,30 @@ fn check_driver_windows() -> DriverStatus {
             match device_io_control(h, IOCTL_PHANTOM_GET_STATUS, &[], &mut status_buf) {
                 Ok(bytes_returned) if bytes_returned >= 20 => {
                     let profile_active = status_buf[4] != 0;
-                    let disk_count = u32::from_le_bytes([status_buf[5], status_buf[6], status_buf[7], status_buf[8]]);
-                    let nic_count = u32::from_le_bytes([status_buf[9], status_buf[10], status_buf[11], status_buf[12]]);
-                    let gpu_count = u32::from_le_bytes([status_buf[13], status_buf[14], status_buf[15], status_buf[16]]);
-                    let intercepted = u32::from_le_bytes([status_buf[21], status_buf[22], status_buf[23], status_buf[24]]);
+                    let disk_count = u32::from_le_bytes([
+                        status_buf[5],
+                        status_buf[6],
+                        status_buf[7],
+                        status_buf[8],
+                    ]);
+                    let nic_count = u32::from_le_bytes([
+                        status_buf[9],
+                        status_buf[10],
+                        status_buf[11],
+                        status_buf[12],
+                    ]);
+                    let gpu_count = u32::from_le_bytes([
+                        status_buf[13],
+                        status_buf[14],
+                        status_buf[15],
+                        status_buf[16],
+                    ]);
+                    let intercepted = u32::from_le_bytes([
+                        status_buf[21],
+                        status_buf[22],
+                        status_buf[23],
+                        status_buf[24],
+                    ]);
 
                     close_handle(h);
                     DriverStatus {
@@ -424,7 +457,11 @@ fn device_io_control(
         DeviceIoControl(
             handle,
             ioctl,
-            if in_buf.is_empty() { std::ptr::null() } else { in_buf.as_ptr() },
+            if in_buf.is_empty() {
+                std::ptr::null()
+            } else {
+                in_buf.as_ptr()
+            },
             in_buf.len() as u32,
             out_buf.as_mut_ptr(),
             out_buf.len() as u32,
@@ -445,5 +482,7 @@ fn close_handle(handle: isize) {
     extern "system" {
         fn CloseHandle(hObject: isize) -> i32;
     }
-    unsafe { CloseHandle(handle); }
+    unsafe {
+        CloseHandle(handle);
+    }
 }

@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive_ext: tar.gz
+            bin_ext: ""
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive_ext: zip
+            bin_ext: ".exe"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release binaries
+        run: cargo build --release --workspace --target ${{ matrix.target }}
+      - name: Package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/phantom-cli dist/phantom
+          cp target/${{ matrix.target }}/release/phantom-svc dist/
+          cp LICENSE README.md dist/
+          tar -czf phantom-${{ github.ref_name }}-${{ matrix.target }}.tar.gz -C dist .
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force
+          Copy-Item target/${{ matrix.target }}/release/phantom-cli.exe dist/phantom.exe
+          Copy-Item target/${{ matrix.target }}/release/phantom-svc.exe dist/
+          if (Test-Path target/${{ matrix.target }}/release/phantom-tray.exe) {
+            Copy-Item target/${{ matrix.target }}/release/phantom-tray.exe dist/
+          }
+          Copy-Item LICENSE dist/
+          Copy-Item README.md dist/
+          Compress-Archive -Path dist/* -DestinationPath phantom-${{ github.ref_name }}-${{ matrix.target }}.zip
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantom-${{ matrix.target }}
+          path: phantom-${{ github.ref_name }}-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  release:
+    name: create release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

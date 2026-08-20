@@ -26,7 +26,12 @@ impl ServiceState {
         self.start_time.elapsed().as_secs()
     }
 
-    pub fn set_protected(&mut self, profile_name: String, layers: Vec<u8>, identifier_count: usize) {
+    pub fn set_protected(
+        &mut self,
+        profile_name: String,
+        layers: Vec<u8>,
+        identifier_count: usize,
+    ) {
         self.protected = true;
         self.active_profile = Some(profile_name.clone());
         self.active_layers = layers.clone();
@@ -71,8 +76,8 @@ impl ServiceConfig {
         let dir = phantom_cli::profile::ensure_profiles_dir()
             .map_err(|e| format!("ensure profiles dir: {}", e))?;
         let path = dir.join(".config.json");
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("serialize config: {}", e))?;
+        let data =
+            serde_json::to_string_pretty(self).map_err(|e| format!("serialize config: {}", e))?;
         std::fs::write(path, data).map_err(|e| format!("write config: {}", e))
     }
 }

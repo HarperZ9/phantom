@@ -1,13 +1,21 @@
-use super::diff::{ValidationResult, EntryStatus};
+use super::diff::{EntryStatus, ValidationResult};
 use super::sources::SourceReadResult;
 
 pub fn print_validation_report(result: &ValidationResult) {
     println!("\n  Phantom Validation Report");
     println!("  {}\n", "=".repeat(60));
 
-    let pass = result.entries.iter().filter(|e| e.status == EntryStatus::Match).count();
+    let pass = result
+        .entries
+        .iter()
+        .filter(|e| e.status == EntryStatus::Match)
+        .count();
     let fail = result.mismatches;
-    let unavail = result.entries.iter().filter(|e| e.status == EntryStatus::NotAvailable).count();
+    let unavail = result
+        .entries
+        .iter()
+        .filter(|e| e.status == EntryStatus::NotAvailable)
+        .count();
 
     println!("  Checked:       {}", result.total_checked);
     println!("  Matching:      {}", pass);
@@ -42,7 +50,10 @@ pub fn print_validation_report(result: &ValidationResult) {
         println!("  All readable identifiers match the active profile.");
     } else if fail > 0 {
         println!("  Result: INCONSISTENT");
-        println!("  {} identifier(s) do not match the expected profile.", fail);
+        println!(
+            "  {} identifier(s) do not match the expected profile.",
+            fail
+        );
         println!("  This may be detectable by fingerprinting software.");
     }
 
@@ -104,9 +115,14 @@ pub fn print_profile_summary(profile: &crate::profile::schema::HardwareProfile) 
 
     println!("  Disks ({}):", profile.disks.len());
     for disk in &profile.disks {
-        println!("    [{}] {} | Serial: {} | FW: {}",
-            disk.index, disk.model, disk.serial, disk.firmware_rev);
-        println!("        Vol: {} | GUID: {}", disk.volume_serial, disk.volume_guid);
+        println!(
+            "    [{}] {} | Serial: {} | FW: {}",
+            disk.index, disk.model, disk.serial, disk.firmware_rev
+        );
+        println!(
+            "        Vol: {} | GUID: {}",
+            disk.volume_serial, disk.volume_guid
+        );
     }
     println!();
 
@@ -118,20 +134,28 @@ pub fn print_profile_summary(profile: &crate::profile::schema::HardwareProfile) 
 
     println!("  GPU ({}):", profile.gpus.len());
     for gpu in &profile.gpus {
-        println!("    VEN_{} DEV_{} | {}", gpu.vendor_id, gpu.device_id, gpu.pnp_instance_id);
+        println!(
+            "    VEN_{} DEV_{} | {}",
+            gpu.vendor_id, gpu.device_id, gpu.pnp_instance_id
+        );
     }
     println!();
 
     if let Some(tpm) = &profile.tpm {
         println!("  TPM:");
-        println!("    {} ({}) TPM {}", tpm.manufacturer_name, tpm.manufacturer_id, tpm.spec_version);
+        println!(
+            "    {} ({}) TPM {}",
+            tpm.manufacturer_name, tpm.manufacturer_id, tpm.spec_version
+        );
         println!();
     }
 
     println!("  Display ({}):", profile.displays.len());
     for disp in &profile.displays {
-        println!("    {} | Product: {} | Serial: {} | Year: {}",
-            disp.manufacturer_code, disp.product_code, disp.serial_number, disp.manufacture_year);
+        println!(
+            "    {} | Product: {} | Serial: {} | Year: {}",
+            disp.manufacturer_code, disp.product_code, disp.serial_number, disp.manufacture_year
+        );
     }
     println!();
 

@@ -1,5 +1,5 @@
-use sha2::{Sha256, Digest};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MachineFingerprint {
@@ -13,31 +13,25 @@ impl MachineFingerprint {
 
         #[cfg(windows)]
         {
-            if let Some(val) = read_registry_string(
-                "SOFTWARE\\Microsoft\\Cryptography",
-                "MachineGuid",
-            ) {
+            if let Some(val) =
+                read_registry_string("SOFTWARE\\Microsoft\\Cryptography", "MachineGuid")
+            {
                 hasher.update(val.as_bytes());
             }
 
-            if let Some(val) = read_registry_string(
-                "SOFTWARE\\Microsoft\\SQMClient",
-                "MachineId",
-            ) {
+            if let Some(val) = read_registry_string("SOFTWARE\\Microsoft\\SQMClient", "MachineId") {
                 hasher.update(val.as_bytes());
             }
 
-            if let Some(val) = read_registry_string(
-                "HARDWARE\\DESCRIPTION\\System\\BIOS",
-                "SystemProductName",
-            ) {
+            if let Some(val) =
+                read_registry_string("HARDWARE\\DESCRIPTION\\System\\BIOS", "SystemProductName")
+            {
                 hasher.update(val.as_bytes());
             }
 
-            if let Some(val) = read_registry_string(
-                "HARDWARE\\DESCRIPTION\\System\\BIOS",
-                "BaseBoardProduct",
-            ) {
+            if let Some(val) =
+                read_registry_string("HARDWARE\\DESCRIPTION\\System\\BIOS", "BaseBoardProduct")
+            {
                 hasher.update(val.as_bytes());
             }
         }
@@ -78,12 +72,19 @@ impl MachineFingerprint {
 fn read_registry_string(subkey: &str, value_name: &str) -> Option<String> {
     extern "system" {
         fn RegOpenKeyExA(
-            hKey: isize, lpSubKey: *const u8, ulOptions: u32,
-            samDesired: u32, phkResult: *mut isize,
+            hKey: isize,
+            lpSubKey: *const u8,
+            ulOptions: u32,
+            samDesired: u32,
+            phkResult: *mut isize,
         ) -> i32;
         fn RegQueryValueExA(
-            hKey: isize, lpValueName: *const u8, lpReserved: *mut u32,
-            lpType: *mut u32, lpData: *mut u8, lpcbData: *mut u32,
+            hKey: isize,
+            lpValueName: *const u8,
+            lpReserved: *mut u32,
+            lpType: *mut u32,
+            lpData: *mut u8,
+            lpcbData: *mut u32,
         ) -> i32;
         fn RegCloseKey(hKey: isize) -> i32;
     }
@@ -96,7 +97,13 @@ fn read_registry_string(subkey: &str, value_name: &str) -> Option<String> {
 
     let mut hkey: isize = 0;
     let rc = unsafe {
-        RegOpenKeyExA(HKEY_LOCAL_MACHINE, subkey_c.as_ptr(), 0, KEY_READ, &mut hkey)
+        RegOpenKeyExA(
+            HKEY_LOCAL_MACHINE,
+            subkey_c.as_ptr(),
+            0,
+            KEY_READ,
+            &mut hkey,
+        )
     };
     if rc != 0 {
         return None;

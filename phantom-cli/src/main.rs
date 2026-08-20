@@ -1,4 +1,8 @@
-use phantom_cli::{apply, audit, profile, validator};
+use phantom_cli::json_out::{
+    ConfigPayload, Envelope, LayerStatus, LicenseStatusPayload, MaxProfiles, ProfileListEntry,
+    StatusPayload,
+};
+use phantom_cli::{apply, audit, config, profile, validator};
 
 use clap::{Parser, Subcommand};
 
@@ -9,9 +13,13 @@ use clap::{Parser, Subcommand};
     long_about = "Phantom generates realistic, internally-consistent hardware identity profiles \
                   and applies them across multiple system layers, giving users control over \
                   what their machine reports to software.",
-    version,
+    version
 )]
 struct Cli {
+    /// Emit machine-readable JSON to stdout instead of the pretty text UI.
+    #[arg(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -59,6 +67,12 @@ enum Commands {
     License {
         #[command(subcommand)]
         action: LicenseAction,
+    },
+
+    /// Show or edit Phantom configuration
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
     },
 }
 
@@ -115,20 +129,30 @@ fn main() {
         }
 
         Commands::Profile { action } => match action {
-            ProfileAction::Generate { name, seed, dry_run } => {
+            ProfileAction::Generate {
+                name,
+                seed,
+                dry_run,
+            } => {
                 if !dry_run {
                     let guard = phantom_license::LicenseGuard::load();
                     let current = profile::list_profiles().unwrap_or_default().len();
                     if let Err(_) = guard.check_profile_limit(current) {
-                        eprintln!("  Profile limit reached for {} tier (max {}).",
-                            guard.tier(), guard.tier().max_profiles());
+                        eprintln!(
+                            "  Profile limit reached for {} tier (max {}).",
+                            guard.tier(),
+                            guard.tier().max_profiles()
+                        );
                         eprintln!("  Upgrade your license or delete existing profiles.");
                         std::process::exit(1);
                     }
                 }
 
                 let seed_str = seed.unwrap_or_else(|| generate_random_seed());
-                println!("  Generating profile '{}' with seed '{}'...", name, seed_str);
+                println!(
+                    "  Generating profile '{}' with seed '{}'...",
+                    name, seed_str
+                );
 
                 let prof = profile::engine::generate_profile(&seed_str, &name);
 
@@ -148,83 +172,93 @@ fn main() {
                 }
             }
 
-            ProfileAction::Show { name } => {
-                match profile::load_profile(&name) {
-                    Ok(prof) => validator::report::print_profile_summary(&prof),
-                    Err(e) => {
-                        eprintln!("  Error loading profile '{}': {}", name, e);
-                        std::process::exit(1);
+            ProfileAction::Show { name } => match profile::load_profile(&name) {
+                Ok(prof) => validator::report::print_profile_summary(&prof),
+                Err(e) => {
+                    eprintln!("  Error loading profile '{}': {}", name, e);
+                    std::process::exit(1);
+                }
+            },
+
+            ProfileAction::List => match profile::list_profiles() {
+                Ok(names) => {
+                    if cli.json {
+                        let entries: Vec<ProfileListEntry> = names
+                            .iter()
+                            .filter_map(|n| {
+                                profile::load_profile(n).ok().map(|p| ProfileListEntry {
+                                    name: n.clone(),
+                                    seed: p.metadata.seed.clone(),
+                                    identifier_count: p.identifier_count(),
+                                })
+                            })
+                            .collect();
+                        Envelope::ok("profile list", entries).print();
+                    } else if names.is_empty() {
+                        println!("  No saved profiles.");
+                        println!("  Use 'phantom profile generate <name>' to create one.");
+                    } else {
+                        println!("\n  Saved profiles:\n");
+                        for name in &names {
+                            match profile::load_profile(name) {
+                                Ok(p) => println!(
+                                    "    {:<20} seed={:<20} vectors={}",
+                                    name,
+                                    p.metadata.seed,
+                                    p.identifier_count(),
+                                ),
+                                Err(_) => println!("    {:<20} (error reading)", name),
+                            }
+                        }
+                        println!();
                     }
                 }
-            }
-
-            ProfileAction::List => {
-                match profile::list_profiles() {
-                    Ok(names) => {
-                        if names.is_empty() {
-                            println!("  No saved profiles.");
-                            println!("  Use 'phantom profile generate <name>' to create one.");
-                        } else {
-                            println!("\n  Saved profiles:\n");
-                            for name in &names {
-                                match profile::load_profile(name) {
-                                    Ok(p) => println!(
-                                        "    {:<20} seed={:<20} vectors={}",
-                                        name, p.metadata.seed, p.identifier_count(),
-                                    ),
-                                    Err(_) => println!("    {:<20} (error reading)", name),
-                                }
-                            }
-                            println!();
-                        }
-                    }
-                    Err(e) => {
+                Err(e) => {
+                    if cli.json {
+                        Envelope::<()>::error("profile list", e.to_string()).print();
+                    } else {
                         eprintln!("  Error listing profiles: {}", e);
-                        std::process::exit(1);
                     }
+                    std::process::exit(1);
                 }
-            }
+            },
 
-            ProfileAction::Export { name } => {
-                match profile::load_profile(&name) {
-                    Ok(prof) => {
-                        let json = serde_json::to_string_pretty(&prof).unwrap();
-                        println!("{}", json);
-                    }
-                    Err(e) => {
-                        eprintln!("  Error loading profile '{}': {}", name, e);
-                        std::process::exit(1);
-                    }
+            ProfileAction::Export { name } => match profile::load_profile(&name) {
+                Ok(prof) => {
+                    let json = serde_json::to_string_pretty(&prof).unwrap();
+                    println!("{}", json);
                 }
-            }
+                Err(e) => {
+                    eprintln!("  Error loading profile '{}': {}", name, e);
+                    std::process::exit(1);
+                }
+            },
 
-            ProfileAction::Import { path } => {
-                match std::fs::read_to_string(&path) {
-                    Ok(json) => {
-                        match serde_json::from_str::<profile::schema::HardwareProfile>(&json) {
-                            Ok(prof) => {
-                                match profile::save_profile(&prof) {
-                                    Ok(saved_path) => {
-                                        println!("  Imported profile '{}' to {}", prof.metadata.name, saved_path.display());
-                                    }
-                                    Err(e) => {
-                                        eprintln!("  Error saving imported profile: {}", e);
-                                        std::process::exit(1);
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("  Error parsing profile JSON: {}", e);
-                                std::process::exit(1);
-                            }
+            ProfileAction::Import { path } => match std::fs::read_to_string(&path) {
+                Ok(json) => match serde_json::from_str::<profile::schema::HardwareProfile>(&json) {
+                    Ok(prof) => match profile::save_profile(&prof) {
+                        Ok(saved_path) => {
+                            println!(
+                                "  Imported profile '{}' to {}",
+                                prof.metadata.name,
+                                saved_path.display()
+                            );
                         }
-                    }
+                        Err(e) => {
+                            eprintln!("  Error saving imported profile: {}", e);
+                            std::process::exit(1);
+                        }
+                    },
                     Err(e) => {
-                        eprintln!("  Error reading file '{}': {}", path, e);
+                        eprintln!("  Error parsing profile JSON: {}", e);
                         std::process::exit(1);
                     }
+                },
+                Err(e) => {
+                    eprintln!("  Error reading file '{}': {}", path, e);
+                    std::process::exit(1);
                 }
-            }
+            },
 
             ProfileAction::Delete { name } => {
                 let dir = profile::profiles_dir();
@@ -277,7 +311,11 @@ fn main() {
                 }
             };
 
-            println!("\n  Applying profile '{}' to {} layer(s)...\n", name, layers.len());
+            println!(
+                "\n  Applying profile '{}' to {} layer(s)...\n",
+                name,
+                layers.len()
+            );
 
             let results = apply::apply_profile(&prof, &layers);
             let mut any_failure = false;
@@ -286,7 +324,11 @@ fn main() {
                 match result {
                     Ok(r) => {
                         if r.success() {
-                            println!("  {} - {} identifiers applied", layer.name(), r.applied.len());
+                            println!(
+                                "  {} - {} identifiers applied",
+                                layer.name(),
+                                r.applied.len()
+                            );
                             for item in &r.applied {
                                 println!("    + {}", item);
                             }
@@ -306,10 +348,16 @@ fn main() {
 
             println!();
             if any_failure {
-                eprintln!("  Some operations failed. Run 'phantom validate {}' to check consistency.", name);
+                eprintln!(
+                    "  Some operations failed. Run 'phantom validate {}' to check consistency.",
+                    name
+                );
                 std::process::exit(1);
             } else {
-                println!("  Done. Run 'phantom validate {}' to verify consistency.", name);
+                println!(
+                    "  Done. Run 'phantom validate {}' to verify consistency.",
+                    name
+                );
             }
         }
 
@@ -341,7 +389,11 @@ fn main() {
                 match result {
                     Ok(r) => {
                         if r.success() {
-                            println!("  {} - {} identifiers restored", layer.name(), r.applied.len());
+                            println!(
+                                "  {} - {} identifiers restored",
+                                layer.name(),
+                                r.applied.len()
+                            );
                         } else {
                             println!("  {} - ERRORS", layer.name());
                             for (item, err) in &r.failed {
@@ -357,37 +409,99 @@ fn main() {
         }
 
         Commands::Status => {
-            println!("\n  Phantom Status\n  {}\n", "=".repeat(50));
-
             let statuses = apply::status();
-            for (layer, status) in &statuses {
-                println!("  {} : {}", layer.name(), status);
-            }
+            let cfg = config::resolved();
 
-            println!();
+            if cli.json {
+                let layers = statuses
+                    .iter()
+                    .map(|(layer, status)| LayerStatus {
+                        layer: match layer {
+                            apply::Layer::Firmware => 0,
+                            apply::Layer::Kernel => 1,
+                            apply::Layer::Userland => 2,
+                        },
+                        name: layer.name(),
+                        status: status.to_string(),
+                    })
+                    .collect();
+                Envelope::ok(
+                    "status",
+                    StatusPayload {
+                        layers,
+                        data_dir: cfg.data_dir.display().to_string(),
+                        pipe_name: cfg.pipe_name.clone(),
+                    },
+                )
+                .print();
+            } else {
+                println!("\n  Phantom Status\n  {}\n", "=".repeat(50));
+                for (layer, status) in &statuses {
+                    println!("  {} : {}", layer.name(), status);
+                }
+                println!();
+            }
         }
 
         Commands::License { action } => match action {
             LicenseAction::Status => {
                 let guard = phantom_license::LicenseGuard::load();
-                println!("\n  Phantom License\n  {}\n", "=".repeat(50));
-                println!("  Tier:       {}", guard.tier());
-                println!("  Licensed:   {}", if guard.is_licensed() { "YES" } else { "NO (Free tier)" });
-                if let Some(days) = guard.days_remaining() {
-                    println!("  Expires in: {} days", days);
-                } else if guard.is_licensed() {
-                    println!("  Expires:    never (perpetual)");
+
+                if cli.json {
+                    let layers_allowed: Vec<u8> = (0u8..=2)
+                        .filter(|l| guard.tier().allows_layer(*l))
+                        .collect();
+                    let max_profiles = match guard.tier() {
+                        phantom_license::LicenseTier::Free => MaxProfiles::Limited(2),
+                        phantom_license::LicenseTier::Pro => MaxProfiles::Limited(50),
+                        phantom_license::LicenseTier::Enterprise => MaxProfiles::Unlimited,
+                    };
+                    let fp = phantom_license::MachineFingerprint::collect();
+                    Envelope::ok(
+                        "license status",
+                        LicenseStatusPayload {
+                            tier: guard.tier().to_string(),
+                            licensed: guard.is_licensed(),
+                            days_remaining: guard.days_remaining(),
+                            layers_allowed,
+                            max_profiles,
+                            machine_fingerprint: fp.hex(),
+                        },
+                    )
+                    .print();
+                } else {
+                    println!("\n  Phantom License\n  {}\n", "=".repeat(50));
+                    println!("  Tier:       {}", guard.tier());
+                    println!(
+                        "  Licensed:   {}",
+                        if guard.is_licensed() {
+                            "YES"
+                        } else {
+                            "NO (Free tier)"
+                        }
+                    );
+                    if let Some(days) = guard.days_remaining() {
+                        println!("  Expires in: {} days", days);
+                    } else if guard.is_licensed() {
+                        println!("  Expires:    never (perpetual)");
+                    }
+                    println!(
+                        "  Layers:     {}",
+                        match guard.tier() {
+                            phantom_license::LicenseTier::Free => "Layer 2 (Registry) only",
+                            _ => "All layers (Firmware, Kernel, Registry)",
+                        }
+                    );
+                    println!(
+                        "  Profiles:   up to {}",
+                        match guard.tier() {
+                            phantom_license::LicenseTier::Free => "2".to_string(),
+                            phantom_license::LicenseTier::Pro => "50".to_string(),
+                            phantom_license::LicenseTier::Enterprise => "unlimited".to_string(),
+                        }
+                    );
+                    println!();
                 }
-                println!("  Layers:     {}", match guard.tier() {
-                    phantom_license::LicenseTier::Free => "Layer 2 (Registry) only",
-                    _ => "All layers (Firmware, Kernel, Registry)",
-                });
-                println!("  Profiles:   up to {}", match guard.tier() {
-                    phantom_license::LicenseTier::Free => "2".to_string(),
-                    phantom_license::LicenseTier::Pro => "50".to_string(),
-                    phantom_license::LicenseTier::Enterprise => "unlimited".to_string(),
-                });
-                println!();
             }
 
             LicenseAction::Activate { key } => {
@@ -415,65 +529,82 @@ fn main() {
         },
 
         Commands::Service { action } => match action {
-            ServiceAction::Ping => {
-                match phantom_ipc::PhantomClient::connect() {
-                    Ok(mut client) => match client.ping() {
-                        Ok(version) => println!("  Service is running (protocol v{})", version),
-                        Err(e) => {
-                            eprintln!("  Service error: {}", e);
-                            std::process::exit(1);
-                        }
-                    },
+            ServiceAction::Ping => match phantom_ipc::PhantomClient::connect() {
+                Ok(mut client) => match client.ping() {
+                    Ok(version) => println!("  Service is running (protocol v{})", version),
                     Err(e) => {
-                        eprintln!("  Cannot connect to Phantom service: {}", e);
+                        eprintln!("  Service error: {}", e);
                         std::process::exit(1);
                     }
+                },
+                Err(e) => {
+                    eprintln!("  Cannot connect to Phantom service: {}", e);
+                    std::process::exit(1);
                 }
-            }
+            },
 
-            ServiceAction::Status => {
-                match phantom_ipc::PhantomClient::connect() {
-                    Ok(mut client) => match client.status() {
-                        Ok(s) => {
-                            println!("\n  Phantom Service Status\n  {}\n", "=".repeat(50));
-                            println!("  Protected:  {}", if s.protected { "YES" } else { "NO" });
-                            if let Some(ref name) = s.active_profile {
-                                println!("  Profile:    {}", name);
-                            }
-                            if !s.active_layers.is_empty() {
-                                let layer_names: Vec<&str> = s.active_layers.iter().map(|l| match l {
+            ServiceAction::Status => match phantom_ipc::PhantomClient::connect() {
+                Ok(mut client) => match client.status() {
+                    Ok(s) => {
+                        println!("\n  Phantom Service Status\n  {}\n", "=".repeat(50));
+                        println!("  Protected:  {}", if s.protected { "YES" } else { "NO" });
+                        if let Some(ref name) = s.active_profile {
+                            println!("  Profile:    {}", name);
+                        }
+                        if !s.active_layers.is_empty() {
+                            let layer_names: Vec<&str> = s
+                                .active_layers
+                                .iter()
+                                .map(|l| match l {
                                     0 => "Firmware",
                                     1 => "Kernel",
                                     2 => "Userland",
                                     _ => "Unknown",
-                                }).collect();
-                                println!("  Layers:     {}", layer_names.join(", "));
+                                })
+                                .collect();
+                            println!("  Layers:     {}", layer_names.join(", "));
+                        }
+                        println!("  Uptime:     {}s", s.uptime_secs);
+                        println!(
+                            "  Driver:     {}",
+                            if s.driver_connected {
+                                "connected"
+                            } else {
+                                "not connected"
                             }
-                            println!("  Uptime:     {}s", s.uptime_secs);
-                            println!("  Driver:     {}", if s.driver_connected { "connected" } else { "not connected" });
-                            println!("  Firmware:   {}", if s.firmware_detected { "detected" } else { "not detected" });
-                            println!();
-                        }
-                        Err(e) => {
-                            eprintln!("  Service error: {}", e);
-                            std::process::exit(1);
-                        }
-                    },
+                        );
+                        println!(
+                            "  Firmware:   {}",
+                            if s.firmware_detected {
+                                "detected"
+                            } else {
+                                "not detected"
+                            }
+                        );
+                        println!();
+                    }
                     Err(e) => {
-                        eprintln!("  Cannot connect to Phantom service: {}", e);
-                        eprintln!("  Is the service running? Try: phantom-svc --standalone");
+                        eprintln!("  Service error: {}", e);
                         std::process::exit(1);
                     }
+                },
+                Err(e) => {
+                    eprintln!("  Cannot connect to Phantom service: {}", e);
+                    eprintln!("  Is the service running? Try: phantom-svc --standalone");
+                    std::process::exit(1);
                 }
-            }
+            },
 
             ServiceAction::Protect { name, layers } => {
-                let layer_bytes: Vec<u8> = layers.split(',').filter_map(|s| match s.trim() {
-                    "0" | "firmware" | "dxe" => Some(0),
-                    "1" | "kernel" | "driver" => Some(1),
-                    "2" | "userland" | "registry" => Some(2),
-                    _ => None,
-                }).collect();
+                let layer_bytes: Vec<u8> = layers
+                    .split(',')
+                    .filter_map(|s| match s.trim() {
+                        "0" | "firmware" | "dxe" => Some(0),
+                        "1" | "kernel" | "driver" => Some(1),
+                        "2" | "userland" | "registry" => Some(2),
+                        _ => None,
+                    })
+                    .collect();
 
                 if layer_bytes.is_empty() {
                     eprintln!("  No valid layers specified.");
@@ -482,8 +613,15 @@ fn main() {
 
                 match phantom_ipc::PhantomClient::connect() {
                     Ok(mut client) => match client.protect(&name, &layer_bytes) {
-                        Ok(phantom_ipc::Response::Applied { layers_applied, identifiers }) => {
-                            println!("  Protected: {} identifiers across {} layer(s)", identifiers, layers_applied.len());
+                        Ok(phantom_ipc::Response::Applied {
+                            layers_applied,
+                            identifiers,
+                        }) => {
+                            println!(
+                                "  Protected: {} identifiers across {} layer(s)",
+                                identifiers,
+                                layers_applied.len()
+                            );
                         }
                         Ok(phantom_ipc::Response::Error { message, .. }) => {
                             eprintln!("  Service error: {}", message);
@@ -502,27 +640,121 @@ fn main() {
                 }
             }
 
-            ServiceAction::Unprotect => {
-                match phantom_ipc::PhantomClient::connect() {
-                    Ok(mut client) => match client.unprotect() {
-                        Ok(phantom_ipc::Response::Reverted { warnings }) => {
-                            println!("  Unprotected: original identifiers restored.");
-                            for w in &warnings {
-                                println!("  Warning: {}", w);
-                            }
+            ServiceAction::Unprotect => match phantom_ipc::PhantomClient::connect() {
+                Ok(mut client) => match client.unprotect() {
+                    Ok(phantom_ipc::Response::Reverted { warnings }) => {
+                        println!("  Unprotected: original identifiers restored.");
+                        for w in &warnings {
+                            println!("  Warning: {}", w);
                         }
-                        Ok(phantom_ipc::Response::Error { message, .. }) => {
-                            eprintln!("  Service error: {}", message);
-                            std::process::exit(1);
-                        }
-                        Ok(_) => println!("  Reverted."),
-                        Err(e) => {
-                            eprintln!("  Error: {}", e);
-                            std::process::exit(1);
-                        }
-                    },
+                    }
+                    Ok(phantom_ipc::Response::Error { message, .. }) => {
+                        eprintln!("  Service error: {}", message);
+                        std::process::exit(1);
+                    }
+                    Ok(_) => println!("  Reverted."),
                     Err(e) => {
-                        eprintln!("  Cannot connect to Phantom service: {}", e);
+                        eprintln!("  Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("  Cannot connect to Phantom service: {}", e);
+                    std::process::exit(1);
+                }
+            },
+        },
+
+        Commands::Config { action } => match action {
+            ConfigAction::Show => {
+                let r = config::resolved();
+                let path = config::config_file_path();
+
+                if cli.json {
+                    Envelope::ok(
+                        "config show",
+                        ConfigPayload {
+                            data_dir: r.data_dir.display().to_string(),
+                            pipe_name: r.pipe_name.clone(),
+                            log_level: r.log_level.clone(),
+                            telemetry_enabled: r.telemetry_enabled,
+                            config_file: path.display().to_string(),
+                            config_file_present: r.source_file_present,
+                        },
+                    )
+                    .print();
+                } else {
+                    println!("\n  Phantom Config\n  {}\n", "=".repeat(50));
+                    println!("  Data dir:    {}", r.data_dir.display());
+                    println!("  Pipe name:   {}", r.pipe_name);
+                    println!("  Log level:   {}", r.log_level);
+                    println!(
+                        "  Telemetry:   {}",
+                        if r.telemetry_enabled { "on" } else { "off" }
+                    );
+                    println!("  Config file: {}", path.display());
+                    println!(
+                        "  File loaded: {}",
+                        if r.source_file_present {
+                            "yes"
+                        } else {
+                            "no (using defaults + env)"
+                        }
+                    );
+                    println!();
+                }
+            }
+
+            ConfigAction::Path => {
+                println!("{}", config::config_file_path().display());
+            }
+
+            ConfigAction::Init => {
+                let path = config::config_file_path();
+                if path.exists() {
+                    eprintln!("  Config file already exists at: {}", path.display());
+                    eprintln!("  Delete it first, or edit it by hand.");
+                    std::process::exit(1);
+                }
+                let cfg = config::PhantomConfig {
+                    data_dir: None,
+                    pipe_name: Some(config::DEFAULT_PIPE_NAME.to_string()),
+                    log_level: Some(config::DEFAULT_LOG_LEVEL.to_string()),
+                    license_key: None,
+                    telemetry_enabled: Some(false),
+                };
+                match config::save_to_file(&cfg) {
+                    Ok(p) => println!("  Wrote default config to: {}", p.display()),
+                    Err(e) => {
+                        eprintln!("  Error writing config: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            ConfigAction::Set { key, value } => {
+                let mut cfg = config::load_from_file();
+                match key.as_str() {
+                    "data_dir" => cfg.data_dir = Some(value),
+                    "pipe_name" => cfg.pipe_name = Some(value),
+                    "log_level" => cfg.log_level = Some(value),
+                    "license_key" => cfg.license_key = Some(value),
+                    "telemetry_enabled" => {
+                        cfg.telemetry_enabled = Some(matches!(
+                            value.to_ascii_lowercase().as_str(),
+                            "1" | "true" | "yes" | "on" | "enable" | "enabled"
+                        ));
+                    }
+                    other => {
+                        eprintln!("  Unknown config key: '{}'", other);
+                        eprintln!("  Valid keys: data_dir, pipe_name, log_level, license_key, telemetry_enabled");
+                        std::process::exit(1);
+                    }
+                }
+                match config::save_to_file(&cfg) {
+                    Ok(p) => println!("  Updated: {}", p.display()),
+                    Err(e) => {
+                        eprintln!("  Error saving config: {}", e);
                         std::process::exit(1);
                     }
                 }
@@ -571,12 +803,36 @@ enum LicenseAction {
     Fingerprint,
 }
 
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Show the resolved runtime configuration (env > file > defaults)
+    Show,
+
+    /// Print the config file path this session would read/write
+    Path,
+
+    /// Write a default config file to disk (fails if one already exists)
+    Init,
+
+    /// Set a single config key ('data_dir', 'pipe_name', 'log_level',
+    /// 'license_key', 'telemetry_enabled') and save
+    Set {
+        /// Config key name
+        key: String,
+        /// Value to store
+        value: String,
+    },
+}
+
 fn generate_random_seed() -> String {
     use rand::Rng;
     let mut rng = rand::rngs::OsRng;
     let bytes: [u8; 16] = rng.gen();
     format!(
         "phantom-{}",
-        bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>()
+        bytes
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
     )
 }

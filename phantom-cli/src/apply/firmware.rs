@@ -52,8 +52,16 @@ pub fn format_firmware_status(status: &FirmwareStatus) -> String {
             SecureBootState::Disabled => "disabled",
             SecureBootState::Unknown => "unknown",
         },
-        if status.dxe_module_installed { "detected" } else { "not detected" },
-        if status.profile_active { "applied" } else { "inactive" },
+        if status.dxe_module_installed {
+            "detected"
+        } else {
+            "not detected"
+        },
+        if status.profile_active {
+            "applied"
+        } else {
+            "inactive"
+        },
         status.tables_modified,
     )
 }
@@ -68,7 +76,10 @@ pub fn install_dxe_module(profile: &HardwareProfile) -> Result<(), String> {
     #[cfg(not(windows))]
     {
         let _ = profile;
-        Err("Layer 0 (DXE firmware) requires Windows with UEFI boot and Secure Boot disabled.".into())
+        Err(
+            "Layer 0 (DXE firmware) requires Windows with UEFI boot and Secure Boot disabled."
+                .into(),
+        )
     }
 }
 
@@ -92,24 +103,64 @@ fn serialize_smbios_profile(profile: &HardwareProfile) -> Result<Vec<u8>, String
     push_u32(&mut buf, PHANTOM_SMBIOS_VERSION);
 
     // Type 0 fields
-    push_fixed_str(&mut buf, &profile.smbios.bios_vendor, PHANTOM_SMBIOS_MAX_STR);
-    push_fixed_str(&mut buf, &profile.smbios.bios_version, PHANTOM_SMBIOS_MAX_STR);
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.bios_vendor,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.bios_version,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
 
     // Type 1 fields
-    push_fixed_str(&mut buf, &profile.smbios.system_manufacturer, PHANTOM_SMBIOS_MAX_STR);
-    push_fixed_str(&mut buf, &profile.smbios.system_product, PHANTOM_SMBIOS_MAX_STR);
-    push_fixed_str(&mut buf, &profile.smbios.system_serial, PHANTOM_SMBIOS_MAX_STR);
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.system_manufacturer,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.system_product,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.system_serial,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
     let uuid = parse_uuid(&profile.smbios.system_uuid)?;
     buf.extend_from_slice(&uuid);
 
     // Type 2 fields
-    push_fixed_str(&mut buf, &profile.smbios.board_manufacturer, PHANTOM_SMBIOS_MAX_STR);
-    push_fixed_str(&mut buf, &profile.smbios.board_product, PHANTOM_SMBIOS_MAX_STR);
-    push_fixed_str(&mut buf, &profile.smbios.board_serial, PHANTOM_SMBIOS_MAX_STR);
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.board_manufacturer,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.board_product,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.board_serial,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
 
     // Type 3 fields
-    push_fixed_str(&mut buf, &profile.smbios.chassis_serial, PHANTOM_SMBIOS_MAX_STR);
-    push_fixed_str(&mut buf, &profile.smbios.chassis_asset_tag, PHANTOM_SMBIOS_MAX_STR);
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.chassis_serial,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
+    push_fixed_str(
+        &mut buf,
+        &profile.smbios.chassis_asset_tag,
+        PHANTOM_SMBIOS_MAX_STR,
+    );
 
     Ok(buf)
 }
@@ -164,7 +215,10 @@ mod tests {
         // Bytes 6-7: little-endian (reversed)
         assert_eq!(bytes[6..8], [0x08, 0x07]);
         // Bytes 8-15: big-endian (unchanged)
-        assert_eq!(bytes[8..16], [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]);
+        assert_eq!(
+            bytes[8..16],
+            [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10]
+        );
     }
 
     #[test]
@@ -416,14 +470,12 @@ fn enable_firmware_privilege() -> Result<(), String> {
     let priv_name = CString::new("SeSystemEnvironmentPrivilege").unwrap();
     let mut luid: u64 = 0;
     let result = unsafe {
-        LookupPrivilegeValueA(
-            std::ptr::null(),
-            priv_name.as_ptr() as *const u8,
-            &mut luid,
-        )
+        LookupPrivilegeValueA(std::ptr::null(), priv_name.as_ptr() as *const u8, &mut luid)
     };
     if result == 0 {
-        unsafe { CloseHandle(token_handle); }
+        unsafe {
+            CloseHandle(token_handle);
+        }
         return Err("Failed to look up firmware privilege".into());
     }
 
@@ -444,7 +496,9 @@ fn enable_firmware_privilege() -> Result<(), String> {
         )
     };
 
-    unsafe { CloseHandle(token_handle); }
+    unsafe {
+        CloseHandle(token_handle);
+    }
 
     if result == 0 {
         Err("Failed to enable firmware environment privilege. Run as Administrator.".into())

@@ -134,6 +134,32 @@ All notable changes to Phantom are documented here. Format follows
   for operator debugging. Documented but not advertised — production
   users have no reason to set it.
 
+### Changed — Sprint 17: config MAC + ptrace lockdown + enrollment helper
+- **Config file is HMAC-signed.** `config.json` gained a `config_mac`
+  field covering the canonical serialization (with `config_mac`
+  cleared). Editing `data_dir` (redirecting license loading to a
+  writable path) or `license_key` (planting a foreign key) fails the
+  MAC and the file is dropped in favor of defaults + env. Legacy
+  files without the field load once for migration and are re-signed
+  on next save. Verified end-to-end: hand-edited `pipe_name`
+  reverts to the default in resolved output.
+- **`prctl(PR_SET_PTRACER, 0)` on Linux.** Combined with the
+  existing `PR_SET_DUMPABLE=0`, this revokes the Yama LSM's same-UID
+  ptrace exemption — `gdb -p <pid>` now fails immediately from the
+  same user, not just from foreign UIDs.
+- **`PHANTOM_DISABLE_INTEGRITY` now also skips hardening**, so
+  operators debugging locally can still attach a debugger.
+
+### Added
+- `phantom license request [--tier free|pro|enterprise]` prints a
+  self-contained enrollment block (fingerprint, requested tier,
+  current tier, platform, build info, master key generation) that the
+  licensing team turns into a machine-bound key. Human-readable text
+  or `--json` `LicenseRequestPayload`.
+- `phantom_license::state_mac_hex()` and `verify_state_mac_hex()`
+  public helpers for CLI-side tamper seals under the STATE_PURPOSE
+  subkey.
+
 ## [0.5.0] — Sprint 10
 
 ### Added

@@ -200,21 +200,38 @@ fn detect_tracer_pid() -> bool {
 /// Apply platform-appropriate hardening to the current process at
 /// startup. Idempotent; safe to call more than once.
 ///
-/// On Linux: `prctl(PR_SET_DUMPABLE, 0)` prevents the kernel from
-/// writing a core dump on crash and blocks another UID's ptrace, which
-/// closes the "dump the process and grep for the master key" attack.
+/// On Linux:
+/// - `prctl(PR_SET_DUMPABLE, 0)` blocks core dumps and foreign-UID
+///   ptrace ("dump the process, grep for the master key").
+/// - `prctl(PR_SET_PTRACER, 0)` on kernels with the Yama LSM enabled
+///   (nearly all distro kernels) revokes the ptrace exemption for
+///   same-UID debuggers. Combined with `PR_SET_DUMPABLE=0` this makes
+///   `gdb -p <pid>` fail immediately even from the same user.
 ///
-/// On Windows: no-op today; SetProcessMitigationPolicy for
-/// dynamic-code and CFG hardening is a candidate for a later sprint.
+/// On Windows: no-op today; SetProcessMitigationPolicy for dynamic-
+/// code and CFG hardening is a candidate for a later sprint.
+///
+/// An operator that genuinely needs to attach a debugger during
+/// development can start the binary with
+/// `PHANTOM_DISABLE_INTEGRITY=1`, which skips this call.
 pub fn harden_process() {
+    if std::env::var_os("PHANTOM_DISABLE_INTEGRITY").is_some() {
+        return;
+    }
     #[cfg(target_os = "linux")]
     {
         const PR_SET_DUMPABLE: i32 = 4;
+        const PR_SET_PTRACER: i32 = 0x59616d61; // "Yama"
         extern "C" {
             fn prctl(option: i32, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> i32;
         }
         unsafe {
             let _ = prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
+            // 0 == PR_SET_PTRACER_ANY reversed: pass 0 to revoke any
+            // previously-declared tracer. The kernel treats an unknown
+            // PR_SET_PTRACER on non-Yama kernels as a no-op errno, so
+            // this is safe to call unconditionally.
+            let _ = prctl(PR_SET_PTRACER, 0, 0, 0, 0);
         }
     }
 }

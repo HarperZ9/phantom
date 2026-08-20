@@ -1,6 +1,6 @@
 use phantom_cli::json_out::{
-    ConfigPayload, Envelope, LayerStatus, LicenseStatusPayload, MaxProfiles, ProfileListEntry,
-    SelfCheckBuild, SelfCheckPayload, StatusPayload, VersionPayload,
+    ConfigPayload, Envelope, LayerStatus, LicenseRequestPayload, LicenseStatusPayload, MaxProfiles,
+    ProfileListEntry, SelfCheckBuild, SelfCheckPayload, StatusPayload, VersionPayload,
 };
 use phantom_cli::{apply, audit, build_info, config, profile, validator};
 
@@ -585,6 +585,70 @@ fn main() {
                 let fp = phantom_license::MachineFingerprint::collect();
                 println!("  Machine fingerprint: {}", fp.hex());
             }
+
+            LicenseAction::Request { tier } => {
+                let fp = phantom_license::MachineFingerprint::collect();
+                let guard = phantom_license::LicenseGuard::load();
+                let requested = match tier.to_ascii_lowercase().as_str() {
+                    "free" => "Free",
+                    "pro" => "Pro",
+                    "enterprise" | "ent" => "Enterprise",
+                    other => {
+                        eprintln!(
+                            "  Unknown tier '{}'. Use one of: free, pro, enterprise.",
+                            other
+                        );
+                        std::process::exit(1);
+                    }
+                };
+                let platform = if cfg!(target_os = "windows") {
+                    "windows"
+                } else if cfg!(target_os = "linux") {
+                    "linux"
+                } else if cfg!(target_os = "macos") {
+                    "macos"
+                } else {
+                    "other"
+                };
+
+                if cli.json {
+                    Envelope::ok(
+                        "license request",
+                        LicenseRequestPayload {
+                            machine_fingerprint: fp.hex(),
+                            requested_tier: requested.to_string(),
+                            current_tier: guard.tier().to_string(),
+                            build: SelfCheckBuild {
+                                version: build_info::VERSION,
+                                git_commit: build_info::GIT_COMMIT,
+                                target: build_info::BUILD_TARGET,
+                                profile: build_info::BUILD_PROFILE,
+                            },
+                            master_key_generation: phantom_license::master_key_generation(),
+                            platform,
+                        },
+                    )
+                    .print();
+                } else {
+                    println!("\n  Phantom License Request");
+                    println!("  {}\n", "=".repeat(50));
+                    println!("  Machine fingerprint : {}", fp.hex());
+                    println!("  Requested tier      : {}", requested);
+                    println!("  Current tier        : {}", guard.tier());
+                    println!("  Platform            : {}", platform);
+                    println!(
+                        "  Master key gen      : {}",
+                        phantom_license::master_key_generation()
+                    );
+                    println!(
+                        "  Build               : {}",
+                        build_info::full_version_string()
+                    );
+                    println!("\n  Send the block above to your Phantom licensing contact.");
+                    println!("  They will issue a key bound to the machine fingerprint");
+                    println!("  shown here. The key is worthless on any other machine.\n");
+                }
+            }
         },
 
         Commands::Service { action } => match action {
@@ -781,6 +845,7 @@ fn main() {
                     log_level: Some(config::DEFAULT_LOG_LEVEL.to_string()),
                     license_key: None,
                     telemetry_enabled: Some(false),
+                    config_mac: String::new(),
                 };
                 match config::save_to_file(&cfg) {
                     Ok(p) => println!("  Wrote default config to: {}", p.display()),
@@ -959,6 +1024,15 @@ enum LicenseAction {
 
     /// Show this machine's hardware fingerprint (for license binding)
     Fingerprint,
+
+    /// Print an enrollment request the licensing team can turn into a
+    /// key. Includes machine fingerprint, requested tier, build info,
+    /// and current tier so the request stands on its own.
+    Request {
+        /// Tier to request: free, pro, enterprise
+        #[arg(long, default_value = "pro")]
+        tier: String,
+    },
 }
 
 #[derive(Subcommand)]

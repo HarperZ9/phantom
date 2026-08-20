@@ -27,6 +27,13 @@ pub struct PhantomConfig {
     pub license_key: Option<String>,
     #[serde(default)]
     pub telemetry_enabled: Option<bool>,
+    /// HMAC-SHA256 (hex) over the canonical serialization of this
+    /// struct with `config_mac` cleared. Prevents field tampering
+    /// (e.g. someone changing `data_dir` to point the license loader
+    /// at an attacker-controlled path). Legacy files without the
+    /// field load once and are re-signed on next save.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub config_mac: String,
 }
 
 impl PhantomConfig {
@@ -37,8 +44,35 @@ impl PhantomConfig {
             log_level: None,
             license_key: None,
             telemetry_enabled: None,
+            config_mac: String::new(),
         }
     }
+}
+
+fn canonical_bytes_for_mac(cfg: &PhantomConfig) -> Vec<u8> {
+    let mut stripped = cfg.clone();
+    stripped.config_mac.clear();
+    serde_json::to_vec(&stripped).unwrap_or_default()
+}
+
+fn seal(cfg: &PhantomConfig) -> PhantomConfig {
+    let mut sealed = cfg.clone();
+    sealed.config_mac.clear();
+    let bytes = canonical_bytes_for_mac(&sealed);
+    sealed.config_mac = phantom_license::state_mac_hex(&bytes);
+    sealed
+}
+
+/// Verify the MAC on a loaded config. Legacy configs (empty
+/// `config_mac`) pass through so upgrading users don't get their
+/// managed settings ignored on first load; they'll be re-sealed on
+/// the next save.
+fn verify(cfg: &PhantomConfig) -> bool {
+    if cfg.config_mac.is_empty() {
+        return true;
+    }
+    let bytes = canonical_bytes_for_mac(cfg);
+    phantom_license::verify_state_mac_hex(&bytes, &cfg.config_mac)
 }
 
 /// Resolve the config file path. `$PHANTOM_CONFIG` wins; otherwise a
@@ -55,10 +89,20 @@ pub fn load_from_file() -> PhantomConfig {
     if !path.exists() {
         return PhantomConfig::empty();
     }
-    std::fs::read_to_string(&path)
+    let Some(cfg) = std::fs::read_to_string(&path)
         .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(PhantomConfig::empty)
+        .and_then(|s| serde_json::from_str::<PhantomConfig>(&s).ok())
+    else {
+        return PhantomConfig::empty();
+    };
+    // MAC check: if a sealed config was tampered with, we cannot trust
+    // any of its fields (an attacker could redirect `data_dir` to a
+    // writable path they've planted a fake license into). Fall back to
+    // defaults + env, which are the only trustworthy inputs left.
+    if !verify(&cfg) {
+        return PhantomConfig::empty();
+    }
+    cfg
 }
 
 pub fn save_to_file(cfg: &PhantomConfig) -> std::io::Result<PathBuf> {
@@ -66,7 +110,10 @@ pub fn save_to_file(cfg: &PhantomConfig) -> std::io::Result<PathBuf> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let json = serde_json::to_string_pretty(cfg)
+    // Always seal on save. Callers pass a mark-less or pre-sealed
+    // struct; `seal` recomputes.
+    let sealed = seal(cfg);
+    let json = serde_json::to_string_pretty(&sealed)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::write(&path, json)?;
     Ok(path)
@@ -187,9 +234,17 @@ mod tests {
             log_level: Some("debug".into()),
             license_key: None,
             telemetry_enabled: Some(false),
+            config_mac: String::new(),
         };
         save_to_file(&cfg).unwrap();
-        assert_eq!(load_from_file(), cfg);
+        // Loaded config carries the freshly-computed MAC; compare
+        // fields instead of the whole struct.
+        let loaded = load_from_file();
+        assert_eq!(loaded.data_dir, cfg.data_dir);
+        assert_eq!(loaded.pipe_name, cfg.pipe_name);
+        assert_eq!(loaded.log_level, cfg.log_level);
+        assert_eq!(loaded.telemetry_enabled, cfg.telemetry_enabled);
+        assert!(!loaded.config_mac.is_empty());
 
         // File wins over defaults when env not set.
         save_to_file(&PhantomConfig {
@@ -198,6 +253,7 @@ mod tests {
             log_level: Some("warn".into()),
             license_key: None,
             telemetry_enabled: Some(true),
+            config_mac: String::new(),
         })
         .unwrap();
         let r = resolved();
@@ -232,5 +288,70 @@ mod tests {
         assert_eq!(parse_bool("off"), Some(false));
         assert_eq!(parse_bool("0"), Some(false));
         assert_eq!(parse_bool("maybe"), None);
+    }
+
+    // Legacy files without a config_mac field must still load; they
+    // get re-sealed on the next save. This is the migration path for
+    // pre-Sprint-17 installations.
+    #[test]
+    fn legacy_config_without_mac_is_accepted() {
+        let cfg = PhantomConfig {
+            data_dir: Some("/opt/legacy".into()),
+            pipe_name: None,
+            log_level: Some("info".into()),
+            license_key: None,
+            telemetry_enabled: None,
+            config_mac: String::new(),
+        };
+        assert!(verify(&cfg));
+    }
+
+    // Tampering with a sealed field must fail the MAC. This is the
+    // main protection: an attacker who edits `data_dir` (to redirect
+    // license loading) or `license_key` (to plant a foreign key) can
+    // no longer make the tool honor the file.
+    #[test]
+    fn tampered_data_dir_breaks_mac() {
+        let mut cfg = seal(&PhantomConfig {
+            data_dir: Some("/genuine/path".into()),
+            pipe_name: None,
+            log_level: None,
+            license_key: None,
+            telemetry_enabled: None,
+            config_mac: String::new(),
+        });
+        assert!(verify(&cfg));
+        cfg.data_dir = Some("/attacker/path".into());
+        assert!(!verify(&cfg));
+    }
+
+    #[test]
+    fn tampered_license_key_breaks_mac() {
+        let mut cfg = seal(&PhantomConfig {
+            data_dir: None,
+            pipe_name: None,
+            log_level: None,
+            license_key: Some("ORIGINAL-KEY".into()),
+            telemetry_enabled: None,
+            config_mac: String::new(),
+        });
+        assert!(verify(&cfg));
+        cfg.license_key = Some("PLANTED-KEY".into());
+        assert!(!verify(&cfg));
+    }
+
+    // A garbage MAC of the correct length must be rejected.
+    #[test]
+    fn forged_mac_rejected() {
+        let mut cfg = seal(&PhantomConfig {
+            data_dir: Some("/x".into()),
+            pipe_name: None,
+            log_level: None,
+            license_key: None,
+            telemetry_enabled: None,
+            config_mac: String::new(),
+        });
+        cfg.config_mac = "00".repeat(32);
+        assert!(!verify(&cfg));
     }
 }

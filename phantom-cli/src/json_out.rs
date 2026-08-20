@@ -119,3 +119,13 @@ pub struct SelfCheckBuild {
     pub target: &'static str,
     pub profile: &'static str,
 }
+
+#[derive(Serialize)]
+pub struct LicenseRequestPayload {
+    pub machine_fingerprint: String,
+    pub requested_tier: String,
+    pub current_tier: String,
+    pub build: SelfCheckBuild,
+    pub master_key_generation: u8,
+    pub platform: &'static str,
+}

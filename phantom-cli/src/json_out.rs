@@ -129,3 +129,17 @@ pub struct LicenseRequestPayload {
     pub master_key_generation: u8,
     pub platform: &'static str,
 }
+
+#[derive(Serialize)]
+pub struct TamperReportPayload {
+    pub tripped: bool,
+    pub events: Vec<TamperEventDto>,
+    pub note: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct TamperEventDto {
+    pub unix_secs: u64,
+    pub severity: &'static str,
+    pub reason: String,
+}

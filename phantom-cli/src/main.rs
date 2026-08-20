@@ -1,6 +1,7 @@
 use phantom_cli::json_out::{
     ConfigPayload, Envelope, LayerStatus, LicenseRequestPayload, LicenseStatusPayload, MaxProfiles,
-    ProfileListEntry, SelfCheckBuild, SelfCheckPayload, StatusPayload, VersionPayload,
+    ProfileListEntry, SelfCheckBuild, SelfCheckPayload, StatusPayload, TamperEventDto,
+    TamperReportPayload, VersionPayload,
 };
 use phantom_cli::{apply, audit, build_info, config, profile, validator};
 
@@ -80,6 +81,15 @@ enum Commands {
 
     /// Report anti-tamper / integrity self-check status
     SelfCheck,
+
+    /// Show the local tamper-tripwire log (never leaves this machine)
+    TamperReport {
+        /// Clear the log after displaying it. Same effect as running
+        /// `license activate <valid-key>` — the log resets when the
+        /// operator proves they hold a real license.
+        #[arg(long)]
+        clear: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -984,6 +994,74 @@ fn main() {
                 println!();
                 if !healthy {
                     std::process::exit(1);
+                }
+            }
+        }
+
+        Commands::TamperReport { clear } => {
+            // The tripwire log is a strictly local record. This
+            // command reads it, optionally clears it, and prints it
+            // to stdout. It NEVER transmits over the network — the
+            // operator decides whether to share the output with
+            // support, and can pipe it through their own redactor
+            // first if they wish.
+            let data_dir = profile::data_dir();
+            let events = phantom_license::tripwire::read_events(&data_dir);
+            let tripped = phantom_license::tripwire::is_tripped(&data_dir);
+
+            if cli.json {
+                Envelope::ok(
+                    "tamper report",
+                    TamperReportPayload {
+                        tripped,
+                        events: events
+                            .iter()
+                            .map(|e| TamperEventDto {
+                                unix_secs: e.unix_secs,
+                                severity: match e.severity {
+                                    phantom_license::tripwire::Severity::Low => "low",
+                                    phantom_license::tripwire::Severity::High => "high",
+                                },
+                                reason: e.reason.clone(),
+                            })
+                            .collect(),
+                        note: "Local file only. Never transmitted over the network.",
+                    },
+                )
+                .print();
+            } else {
+                println!("\n  Phantom Tamper Report\n  {}\n", "=".repeat(50));
+                println!(
+                    "  Overall:  {}",
+                    if tripped {
+                        "TRIPPED — install silently downgraded to Free tier"
+                    } else {
+                        "clean"
+                    }
+                );
+                println!("  Events:   {}", events.len());
+                if events.is_empty() {
+                    println!("  (no tripwire events recorded)");
+                } else {
+                    println!();
+                    for e in &events {
+                        let sev = match e.severity {
+                            phantom_license::tripwire::Severity::Low => "low ",
+                            phantom_license::tripwire::Severity::High => "HIGH",
+                        };
+                        println!("    [{}] t={} reason={}", sev, e.unix_secs, e.reason);
+                    }
+                }
+                println!();
+                println!("  This report never leaves this machine unless you share it.");
+                println!("  A successful `phantom license activate <your-key>` also clears it.");
+                println!();
+            }
+
+            if clear {
+                phantom_license::tripwire::clear(&data_dir);
+                if !cli.json {
+                    println!("  Log cleared.\n");
                 }
             }
         }

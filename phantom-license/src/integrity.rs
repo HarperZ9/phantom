@@ -245,6 +245,25 @@ pub fn self_check() -> bool {
 
 /// Full self-check result usable by `phantom self-check` and any
 /// caller that wants observability into which detectors fired.
+///
+/// Any triggered detector also lands a **Low-severity** tripwire
+/// entry under `data_dir` when one is provided. Low events do not
+/// silently lock the install — they are visible via
+/// `phantom tamper-report` for the operator's own inspection.
+/// Legitimate profilers (LD_PRELOAD, MALLOC_TRACE) do trip these,
+/// so they are informational only.
+pub fn full_self_check_with_log(data_dir: Option<&std::path::Path>) -> DetectionVerdict {
+    let v = detect_debugger_ensemble();
+    if !v.all_clear {
+        if let Some(dir) = data_dir {
+            for reason in &v.triggered {
+                crate::tripwire::record(dir, crate::tripwire::Severity::Low, reason);
+            }
+        }
+    }
+    v
+}
+
 pub fn full_self_check() -> DetectionVerdict {
     detect_debugger_ensemble()
 }

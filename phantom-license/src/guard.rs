@@ -61,6 +61,23 @@ impl LicenseGuard {
     pub fn load() -> Self {
         let path = license_file_path();
 
+        // Tripwire gate: if any High-severity tamper event has been
+        // recorded on this machine, silently return Free tier from
+        // this point on. No error is printed — the reverser has no
+        // signal to grep for. The tripwire clears on successful
+        // reactivation, so a legitimate operator whose install was
+        // flagged in error can recover by re-running
+        // `phantom license activate <their-real-key>`.
+        if let Some(parent) = path.parent() {
+            if crate::tripwire::is_tripped(parent) {
+                return LicenseGuard {
+                    license: None,
+                    tier: LicenseTier::Free,
+                    key_str: None,
+                };
+            }
+        }
+
         // Advance the time anchor first. If the wall clock has been
         // rewound beyond the grace window, refuse to honor any stored
         // license this cycle — the attacker is trying to freeze time
@@ -71,6 +88,7 @@ impl LicenseGuard {
                 crate::time_anchor::check_and_advance(parent),
                 crate::time_anchor::AnchorVerdict::ClockRewound { .. }
             ) {
+                crate::tripwire::record(parent, crate::tripwire::Severity::High, "clock_rewound");
                 return LicenseGuard {
                     license: None,
                     tier: LicenseTier::Free,
@@ -81,17 +99,27 @@ impl LicenseGuard {
 
         if let Ok(data) = std::fs::read_to_string(&path) {
             if let Ok(stored) = serde_json::from_str::<StoredLicense>(&data) {
-                if verify_state_mac(&stored) {
-                    if let Ok(license) = validate_license_key(&stored.key) {
-                        let fp = MachineFingerprint::collect();
-                        if license.is_bound_to(&fp) && !license.is_expired() {
-                            let tier = license.tier;
-                            return LicenseGuard {
-                                license: Some(license),
-                                tier,
-                                key_str: Some(stored.key),
-                            };
-                        }
+                if !verify_state_mac(&stored) {
+                    // State MAC failure is a High-confidence tamper
+                    // signal: nobody edits `.license.json` by hand
+                    // for legitimate reasons, and the file cannot get
+                    // there by accident with a valid MAC.
+                    if let Some(parent) = path.parent() {
+                        crate::tripwire::record(
+                            parent,
+                            crate::tripwire::Severity::High,
+                            "state_mac_failed",
+                        );
+                    }
+                } else if let Ok(license) = validate_license_key(&stored.key) {
+                    let fp = MachineFingerprint::collect();
+                    if license.is_bound_to(&fp) && !license.is_expired() {
+                        let tier = license.tier;
+                        return LicenseGuard {
+                            license: Some(license),
+                            tier,
+                            key_str: Some(stored.key),
+                        };
                     }
                 }
             }
@@ -107,6 +135,20 @@ impl LicenseGuard {
     pub fn activate(key_str: &str) -> Result<Self, LicenseError> {
         let path = license_file_path();
         let data_dir = path.parent().map(|p| p.to_path_buf());
+
+        // Honey-key gate: strings-scraped decoy keys from the binary
+        // trip a High-severity tripwire on the first attempt. From
+        // that point on this install silently downgrades to Free
+        // tier. Real users mistyping a real key never hit this — the
+        // honey strings are distinctive (PHANTOM-MASTER-UNLOCK-...).
+        if crate::tripwire::is_honey_key(key_str) {
+            if let Some(dir) = data_dir.as_deref() {
+                crate::tripwire::record(dir, crate::tripwire::Severity::High, "honey_key_attempt");
+            }
+            // Return the same error a plain invalid key would produce
+            // so the caller cannot distinguish honey from garbage.
+            return Err(LicenseError::InvalidSignature);
+        }
 
         // Rate-limit gate: consult the attempt log first so brute-force
         // attempts are throttled before any key material is exercised.
@@ -124,6 +166,11 @@ impl LicenseGuard {
             Ok(_) => {
                 if let Some(dir) = data_dir.as_deref() {
                     crate::rate_limit::clear(dir);
+                    // A verified activation is the ONLY way to clear
+                    // the tripwire. Legitimate operators whose
+                    // install was flagged in error recover by
+                    // re-running activate with their real key.
+                    crate::tripwire::clear(dir);
                 }
             }
             Err(_) => {

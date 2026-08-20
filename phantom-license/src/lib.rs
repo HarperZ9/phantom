@@ -6,6 +6,7 @@ pub(crate) mod keys;
 pub mod rate_limit;
 pub mod redact;
 pub mod time_anchor;
+pub mod tripwire;
 pub mod watermark;
 
 pub use fingerprint::MachineFingerprint;

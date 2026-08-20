@@ -187,6 +187,51 @@ All notable changes to Phantom are documented here. Format follows
   fingerprint / MAC / license-key scrubbing, short dashed UUID not
   matched, multi-secret line, panic-hook idempotency.
 
+### Changed — Sprint 19: tripwire + honey license keys
+- **Anti-tamper tripwire log** at `<data_dir>/.tripwire`. Every entry
+  is HMAC-signed under STATE_PURPOSE — an attacker cannot silently
+  trim or edit the log without failing MAC verification. Two
+  severities:
+  - **Low** (LD_PRELOAD, tracer_pid, debugger_env): recorded for
+    operator visibility via `phantom tamper-report`; does not lock
+    the install. Legitimate profilers trigger these, so acting on
+    them would misfire.
+  - **High** (state MAC failure, honey-key attempt, clock rewind):
+    `LicenseGuard::load()` silently returns Free tier from that
+    point on. Cracked installs become functionally-Free installs
+    with no visible error. Successful `license activate` with a
+    real key clears the tripwire.
+- **Honey license keys.** Eight well-formed-looking but never-issued
+  strings baked into the binary as bait. Any attempt to activate one
+  records a High-severity trip. The failure returned is the same
+  `InvalidSignature` as any other bad key — no distinguishing signal.
+- **`phantom tamper-report [--clear]`** subcommand: reads the local
+  log, optionally clears it, and prints it in text or `--json`. The
+  log **never leaves this machine over the network.** The command
+  makes that guarantee visible in the output.
+- Detector ensemble triggers now also land a Low-severity tripwire
+  event via `integrity::full_self_check_with_log()`.
+
+### Design boundaries (deliberate non-goals)
+- **Nothing outside `<data_dir>` is ever touched.** No writes to
+  user home directories, browser data, other applications, system
+  files, or the OS. The tool serves users who chose it for
+  anonymity — the anti-tamper posture cannot itself become a way
+  to de-anonymize them.
+- **Nothing is transmitted over the network.** Ever. Not even
+  aggregate counters, not even hashed telemetry. If an operator
+  wants to share a tamper report with support, they run
+  `phantom tamper-report` themselves and paste the output.
+- **No damage to the reverser's machine.** No shellcode payload,
+  no privilege-escalation attempt, no destruction of unrelated
+  files, no bricking, no rootkits. The cracked install becomes
+  Free tier — that is the full extent.
+
+### Added
+- `phantom_license::tripwire` module (8 tests: empty/low/high state
+  transitions, forgery rejection, dedup, honey-key normalization,
+  arbitrary-string negative).
+
 ## [0.5.0] — Sprint 10
 
 ### Added

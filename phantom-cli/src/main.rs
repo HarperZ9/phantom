@@ -90,6 +90,14 @@ enum Commands {
         #[arg(long)]
         clear: bool,
     },
+
+    /// Show the Phantom Privacy Notice describing what phone-home
+    /// sends. Also reports whether this install has acknowledged it.
+    PrivacyNotice,
+
+    /// Show the Phantom Terms of Use and this install's acceptance
+    /// status.
+    Tou,
 }
 
 #[derive(Subcommand)]
@@ -146,6 +154,13 @@ fn main() {
     // PR_SET_DUMPABLE=0 — closing the "core-dump the process and
     // grep for the master key" attack. No-op on Windows for now.
     phantom_license::integrity::harden_process();
+
+    // Opportunistic license phone-home. Fires only when the operator
+    // has acknowledged the Privacy Notice AND phone_home_enabled is
+    // not explicitly false AND phone_home_url is set AND the 24h
+    // interval has elapsed since the last call. Runs on a detached
+    // thread so we never block the user's command on the network.
+    maybe_spawn_phone_home();
 
     let cli = Cli::parse();
 
@@ -570,10 +585,34 @@ fn main() {
                 }
             }
 
-            LicenseAction::Activate { key } => {
+            LicenseAction::Activate {
+                key,
+                accept_tou,
+                acknowledge_privacy_notice,
+            } => {
+                // Enforce ToU + Privacy Notice acknowledgment BEFORE
+                // touching key material. Both documents ship at pinned
+                // versions in phantom_license::legal; version bumps
+                // force re-acknowledgment. Non-interactive callers
+                // must pass --accept-tou and --acknowledge-privacy-
+                // notice; interactive TTYs are prompted.
+                if let Err(msg) = ensure_disclosures(accept_tou, acknowledge_privacy_notice) {
+                    eprintln!("  {}", msg);
+                    std::process::exit(1);
+                }
+
                 match phantom_license::LicenseGuard::activate(&key) {
                     Ok(guard) => {
                         println!("  License activated: {} tier", guard.tier());
+                        if let Some(cfg) = config_after_activate() {
+                            if cfg.phone_home_active() {
+                                println!(
+                                    "  Phone-home is ENABLED (endpoint: {}). \
+                                     Disable with: phantom config set phone_home_enabled false",
+                                    cfg.phone_home_url.as_deref().unwrap_or("<unset>")
+                                );
+                            }
+                        }
                     }
                     Err(phantom_license::LicenseError::RateLimited(secs)) => {
                         eprintln!(
@@ -854,12 +893,10 @@ fn main() {
                     std::process::exit(1);
                 }
                 let cfg = config::PhantomConfig {
-                    data_dir: None,
                     pipe_name: Some(config::DEFAULT_PIPE_NAME.to_string()),
                     log_level: Some(config::DEFAULT_LOG_LEVEL.to_string()),
-                    license_key: None,
                     telemetry_enabled: Some(false),
-                    config_mac: String::new(),
+                    ..config::PhantomConfig::empty()
                 };
                 match config::save_to_file(&cfg) {
                     Ok(p) => println!("  Wrote default config to: {}", p.display()),
@@ -1065,6 +1102,67 @@ fn main() {
                 }
             }
         }
+
+        Commands::PrivacyNotice => {
+            let cfg = config::load_from_file();
+            print_document("PRIVACY NOTICE", phantom_license::legal::PRIVACY_NOTICE);
+            println!(
+                "  Version shipping in this build: {}",
+                phantom_license::legal::PRIVACY_NOTICE_VERSION
+            );
+            match (
+                cfg.privacy_notice_version_accepted,
+                cfg.privacy_notice_acknowledged_at,
+            ) {
+                (Some(v), Some(t)) if v >= phantom_license::legal::PRIVACY_NOTICE_VERSION => {
+                    println!("  This install: acknowledged version {} at unix {}", v, t);
+                }
+                (Some(v), _) => {
+                    println!(
+                        "  This install: acknowledged version {} (STALE — current is {})",
+                        v,
+                        phantom_license::legal::PRIVACY_NOTICE_VERSION
+                    );
+                }
+                (None, _) => {
+                    println!("  This install: NOT YET ACKNOWLEDGED");
+                }
+            }
+            println!(
+                "  Phone-home currently: {}",
+                if cfg.phone_home_active() {
+                    "ACTIVE"
+                } else {
+                    "inactive"
+                }
+            );
+            println!();
+        }
+
+        Commands::Tou => {
+            let cfg = config::load_from_file();
+            print_document("TERMS OF USE", phantom_license::legal::TOU);
+            println!(
+                "  Version shipping in this build: {}",
+                phantom_license::legal::TOU_VERSION
+            );
+            match (cfg.tou_version_accepted, cfg.tou_accepted_at) {
+                (Some(v), Some(t)) if v >= phantom_license::legal::TOU_VERSION => {
+                    println!("  This install: accepted version {} at unix {}", v, t);
+                }
+                (Some(v), _) => {
+                    println!(
+                        "  This install: accepted version {} (STALE — current is {})",
+                        v,
+                        phantom_license::legal::TOU_VERSION
+                    );
+                }
+                (None, _) => {
+                    println!("  This install: NOT YET ACCEPTED");
+                }
+            }
+            println!();
+        }
     }
 }
 
@@ -1099,6 +1197,17 @@ enum LicenseAction {
     Activate {
         /// License key string
         key: String,
+        /// Non-interactive acceptance of the current Terms of Use.
+        /// Required in headless environments (SCCM, containers,
+        /// unattended installers). In an interactive TTY the tool
+        /// prompts.
+        #[arg(long)]
+        accept_tou: bool,
+        /// Non-interactive acknowledgment of the current Privacy
+        /// Notice (the phone-home disclosure). Required for
+        /// unattended activation; interactive TTY prompts.
+        #[arg(long)]
+        acknowledge_privacy_notice: bool,
     },
 
     /// Deactivate the current license
@@ -1149,4 +1258,186 @@ fn generate_random_seed() -> String {
             .map(|b| format!("{:02x}", b))
             .collect::<String>()
     )
+}
+
+/// Present the ToU and Privacy Notice to the operator (if not
+/// already accepted for the current version) and persist their
+/// acknowledgment into the sealed config. Returns Err(msg) when the
+/// operator declined or when a non-interactive caller failed to pass
+/// the required flags.
+///
+/// When a compile-time default phone-home URL is baked in and the
+/// operator has no URL configured, acknowledging the Privacy Notice
+/// also populates `phone_home_url` from that default — so the
+/// disclosure IS the moment the user learns which endpoint gets
+/// called, not two config-lookups later.
+fn ensure_disclosures(accept_tou_flag: bool, ack_privacy_flag: bool) -> Result<(), String> {
+    let mut cfg = config::load_from_file();
+    let mut changed = false;
+
+    // ToU
+    if !cfg.tou_current() {
+        let accepted = if accept_tou_flag {
+            true
+        } else if atty_stdin() {
+            print_document("TERMS OF USE", phantom_license::legal::TOU);
+            prompt_yes_no("Do you accept these Terms of Use? [y/N] ", false)
+        } else {
+            return Err(
+                "Terms of Use not yet accepted. Re-run with --accept-tou, or run \
+                 `phantom tou` in an interactive shell to review and accept."
+                    .into(),
+            );
+        };
+        if !accepted {
+            return Err("Terms of Use declined. Activation aborted.".into());
+        }
+        cfg.tou_accepted_at = Some(now_unix_secs());
+        cfg.tou_version_accepted = Some(phantom_license::legal::TOU_VERSION);
+        changed = true;
+    }
+
+    // Privacy notice
+    if !cfg.privacy_notice_current() {
+        let accepted = if ack_privacy_flag {
+            true
+        } else if atty_stdin() {
+            print_document("PRIVACY NOTICE", phantom_license::legal::PRIVACY_NOTICE);
+            prompt_yes_no(
+                "Do you acknowledge and enable the phone-home callback? [Y/n] ",
+                true,
+            )
+        } else {
+            return Err("Privacy Notice not yet acknowledged. Re-run with \
+                 --acknowledge-privacy-notice, or run `phantom privacy-notice` \
+                 in an interactive shell to review and acknowledge."
+                .into());
+        };
+        cfg.privacy_notice_acknowledged_at = Some(now_unix_secs());
+        cfg.privacy_notice_version_accepted = Some(phantom_license::legal::PRIVACY_NOTICE_VERSION);
+        // The default = enabled when acknowledged. Explicit later
+        // `config set phone_home_enabled false` opts out.
+        cfg.phone_home_enabled = Some(accepted);
+        // Populate the phone-home URL from the compile-time default
+        // if the operator hasn't set one — this is the moment they
+        // consented to it being called.
+        if cfg.phone_home_url.is_none() {
+            if let Some(url) = config::compiled_default_phone_home_url() {
+                cfg.phone_home_url = Some(url.to_string());
+            }
+        }
+        changed = true;
+    }
+
+    if changed {
+        if let Err(e) = config::save_to_file(&cfg) {
+            return Err(format!("Failed to persist acknowledgment: {}", e));
+        }
+    }
+    Ok(())
+}
+
+fn atty_stdin() -> bool {
+    // Deliberately dep-free: check if stdin is a TTY via isatty(0).
+    #[cfg(unix)]
+    unsafe {
+        extern "C" {
+            fn isatty(fd: i32) -> i32;
+        }
+        isatty(0) != 0
+    }
+    #[cfg(windows)]
+    {
+        // No dep-free path on Windows without winapi; treat as TTY
+        // so unattended installers must pass --accept-tou etc.
+        // explicitly, which is the safer default.
+        true
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
+fn prompt_yes_no(prompt: &str, default_yes: bool) -> bool {
+    use std::io::{BufRead, Write};
+    print!("{}", prompt);
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    if std::io::stdin().lock().read_line(&mut line).is_err() {
+        return default_yes;
+    }
+    let s = line.trim().to_ascii_lowercase();
+    if s.is_empty() {
+        return default_yes;
+    }
+    matches!(s.as_str(), "y" | "yes")
+}
+
+fn print_document(title: &str, body: &str) {
+    println!();
+    println!("--- BEGIN {} ---", title);
+    println!("{}", body);
+    println!("--- END {} ---", title);
+    println!();
+}
+
+fn now_unix_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn config_after_activate() -> Option<config::PhantomConfig> {
+    Some(config::load_from_file())
+}
+
+/// Fire the license phone-home in a detached thread if configuration
+/// says it's active. Never blocks the caller — the CLI proceeds
+/// immediately regardless of the endpoint's reachability. On a
+/// `{"revoked": true}` response, the tripwire records a
+/// High-severity event and the next `LicenseGuard::load()` will
+/// silently downgrade the install.
+fn maybe_spawn_phone_home() {
+    let cfg = config::load_from_file();
+    if !cfg.phone_home_active() {
+        return;
+    }
+    let url = match cfg.phone_home_url.clone() {
+        Some(u) => u,
+        None => return,
+    };
+    let interval = cfg
+        .phone_home_interval_secs
+        .unwrap_or(phantom_license::phone_home::DEFAULT_INTERVAL_SECS);
+    let data_dir = profile::data_dir();
+
+    if !phantom_license::phone_home::is_due(&data_dir, &url, interval) {
+        return;
+    }
+
+    let guard = phantom_license::LicenseGuard::load();
+    let key_str = cfg.license_key.clone();
+    let tier = guard.tier().to_string();
+    let version = build_info::VERSION.to_string();
+    let tripwire = phantom_license::tripwire::read_events(&data_dir);
+    let (low, high) = tripwire
+        .iter()
+        .fold((0u32, 0u32), |(l, h), e| match e.severity {
+            phantom_license::tripwire::Severity::Low => (l + 1, h),
+            phantom_license::tripwire::Severity::High => (l, h + 1),
+        });
+
+    std::thread::spawn(move || {
+        let payload = phantom_license::phone_home::build_payload(
+            key_str.as_deref(),
+            &tier,
+            &version,
+            low,
+            high,
+        );
+        let _ =
+            phantom_license::phone_home::maybe_phone_home(&data_dir, Some(&url), interval, payload);
+    });
 }

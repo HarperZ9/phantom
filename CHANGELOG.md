@@ -295,6 +295,74 @@ All notable changes to Phantom are documented here. Format follows
   deterministic and distinct per key.
 - Total workspace: **190 tests** passing (up from 173).
 
+### Changed — Sprint 21: disclosed opt-out telemetry + ToU + response tooling
+- **First-run acknowledgment flow.** `phantom license activate` now
+  requires acceptance of the Terms of Use AND the Privacy Notice
+  before it touches key material. Interactive TTYs are prompted;
+  headless installers must pass `--accept-tou` and
+  `--acknowledge-privacy-notice`. Rejection or missing flags aborts
+  activation with a clear message pointing at `phantom tou` and
+  `phantom privacy-notice`.
+- **Pinned legal text in `phantom_license::legal`.** Full Privacy
+  Notice and Terms of Use as compiled-in constants with monotonic
+  version integers (`PRIVACY_NOTICE_VERSION`, `TOU_VERSION`). A
+  version bump forces re-acknowledgment on the next `activate`;
+  stale acknowledgments do NOT satisfy `phone_home_active()`.
+  Tests pin the version numbers and pin specific enforceable
+  claims (disable-command mention, no-fingerprint promise,
+  revocation + appeal clauses).
+- **Opt-out phone-home semantics — with mandatory disclosure.**
+  Once the notice is acknowledged, `phone_home_enabled` defaults to
+  true and calls fire on the 24h interval. Users disable at any
+  time with `phantom config set phone_home_enabled false`. Explicit
+  `phone_home_enabled: false` in config beats any acknowledgment.
+- **Compile-time default endpoint via `PHANTOM_DEFAULT_PHONE_HOME_URL`
+  build env var.** Vendor release builds set the env var at
+  `cargo build --release` time; the resulting binary bakes in the
+  endpoint and populates `phone_home_url` when the operator
+  acknowledges the notice. Dev builds ship without a baked
+  endpoint. Operator can always override in the config file.
+- **Opportunistic non-blocking call at CLI startup.** Every
+  `phantom …` invocation calls `maybe_spawn_phone_home()` at
+  `main()`, which consults the config, checks if the call is due,
+  and detaches a thread to make the call via `curl`. The user's
+  command proceeds without waiting; a `{"revoked": true}` response
+  from a prior call trips the tripwire and the next
+  `LicenseGuard::load()` downgrades to Free.
+
+### Added
+- `phantom privacy-notice` — displays the current Privacy Notice
+  and this install's acknowledgment status (accepted version,
+  timestamp, whether phone-home is currently active).
+- `phantom tou` — same for the Terms of Use.
+- `PhantomConfig` fields: `phone_home_url`, `phone_home_enabled`,
+  `phone_home_interval_secs`, `privacy_notice_acknowledged_at`,
+  `privacy_notice_version_accepted`, `tou_accepted_at`,
+  `tou_version_accepted`. All covered by the existing config MAC
+  so a hand-edited acknowledgment fails the seal.
+- `PhantomConfig::phone_home_active()` — the single gate the
+  runtime consults.
+- 4 new config tests: acknowledgment-gating, active-after-ack,
+  explicit-disable-beats-ack, stale-version-requires-reack.
+- Total workspace: **198 tests** passing (up from 190).
+
+### Design principles held
+- **Disclosure precedes any call.** The Privacy Notice and ToU are
+  shown before activation completes; phone-home cannot fire until
+  they've been acknowledged for the current version.
+- **Auditability.** `phantom privacy-notice` and `phantom tou`
+  reprint the shipping text at any time. Every phone-home call is
+  recorded to the signed local log. The endpoint URL is visible in
+  `ps` because transport is `curl`.
+- **User controls.** `phantom config set phone_home_enabled false`
+  disables. No env var required. The change is sealed into the
+  MAC'd config so a downstream tamperer cannot silently re-enable.
+- **No hidden collection.** The Privacy Notice text lists exactly
+  what is sent, and the `phone_home::PhoneHomePayload` struct
+  matches that list byte-for-byte. Adding a field to the payload
+  without updating the notice text and version fails the pinned
+  claim tests.
+
 ## [0.5.0] — Sprint 10
 
 ### Added

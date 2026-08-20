@@ -27,6 +27,36 @@ pub struct PhantomConfig {
     pub license_key: Option<String>,
     #[serde(default)]
     pub telemetry_enabled: Option<bool>,
+    /// URL for license phone-home. Unset → no calls. Set (either by
+    /// operator via `config set` or by the acknowledgment flow if a
+    /// compile-time default is baked in) → calls happen every
+    /// `phone_home_interval_secs`, subject to `phone_home_enabled`.
+    #[serde(default)]
+    pub phone_home_url: Option<String>,
+    /// Master switch for phone-home. Default (`None`) is treated as
+    /// enabled AFTER acknowledgment, disabled before. Setting to
+    /// `Some(false)` disables regardless of acknowledgment.
+    #[serde(default)]
+    pub phone_home_enabled: Option<bool>,
+    /// Seconds between phone-home calls. Defaults to
+    /// `phone_home::DEFAULT_INTERVAL_SECS` (24h) when unset.
+    #[serde(default)]
+    pub phone_home_interval_secs: Option<u64>,
+    /// Unix seconds when the user acknowledged the current privacy
+    /// notice. Absent → notice not yet shown. Non-zero AND
+    /// `privacy_notice_version_accepted` >= current version → good.
+    #[serde(default)]
+    pub privacy_notice_acknowledged_at: Option<u64>,
+    /// Which version of the privacy notice the user accepted. A
+    /// version bump forces re-acknowledgment.
+    #[serde(default)]
+    pub privacy_notice_version_accepted: Option<u32>,
+    /// Unix seconds when the user accepted the current ToU.
+    #[serde(default)]
+    pub tou_accepted_at: Option<u64>,
+    /// Which version of the ToU the user accepted.
+    #[serde(default)]
+    pub tou_version_accepted: Option<u32>,
     /// HMAC-SHA256 (hex) over the canonical serialization of this
     /// struct with `config_mac` cleared. Prevents field tampering
     /// (e.g. someone changing `data_dir` to point the license loader
@@ -44,9 +74,51 @@ impl PhantomConfig {
             log_level: None,
             license_key: None,
             telemetry_enabled: None,
+            phone_home_url: None,
+            phone_home_enabled: None,
+            phone_home_interval_secs: None,
+            privacy_notice_acknowledged_at: None,
+            privacy_notice_version_accepted: None,
+            tou_accepted_at: None,
+            tou_version_accepted: None,
             config_mac: String::new(),
         }
     }
+
+    /// Has the user acknowledged the currently-shipping privacy
+    /// notice? A bump to `PRIVACY_NOTICE_VERSION` invalidates the
+    /// previous acknowledgment.
+    pub fn privacy_notice_current(&self) -> bool {
+        self.privacy_notice_version_accepted
+            .is_some_and(|v| v >= phantom_license::legal::PRIVACY_NOTICE_VERSION)
+    }
+
+    /// Has the user accepted the currently-shipping ToU?
+    pub fn tou_current(&self) -> bool {
+        self.tou_version_accepted
+            .is_some_and(|v| v >= phantom_license::legal::TOU_VERSION)
+    }
+
+    /// Should phone-home fire? Requires: URL set (either by user
+    /// or by acknowledgment picking up the compile-time default),
+    /// notice acknowledged for the current version, and
+    /// `phone_home_enabled` not explicitly false.
+    pub fn phone_home_active(&self) -> bool {
+        self.phone_home_url
+            .as_deref()
+            .is_some_and(|u| !u.is_empty())
+            && self.privacy_notice_current()
+            && self.phone_home_enabled.unwrap_or(true)
+    }
+}
+
+/// Compile-time default phone-home URL, populated from the
+/// `PHANTOM_DEFAULT_PHONE_HOME_URL` env var at build time via
+/// `build.rs`. Vendor release builds set this env var; dev builds do
+/// not, so `option_env!` returns `None` and the tool ships with no
+/// baked endpoint. Operator can always override in the config file.
+pub fn compiled_default_phone_home_url() -> Option<&'static str> {
+    option_env!("PHANTOM_DEFAULT_PHONE_HOME_URL").filter(|s| !s.is_empty())
 }
 
 fn canonical_bytes_for_mac(cfg: &PhantomConfig) -> Vec<u8> {
@@ -232,9 +304,8 @@ mod tests {
             data_dir: Some("/opt/phantom".into()),
             pipe_name: Some(r"\\.\pipe\Corp".into()),
             log_level: Some("debug".into()),
-            license_key: None,
             telemetry_enabled: Some(false),
-            config_mac: String::new(),
+            ..PhantomConfig::empty()
         };
         save_to_file(&cfg).unwrap();
         // Loaded config carries the freshly-computed MAC; compare
@@ -251,9 +322,8 @@ mod tests {
             data_dir: Some("/from/file".into()),
             pipe_name: Some(r"\\.\pipe\FromFile".into()),
             log_level: Some("warn".into()),
-            license_key: None,
             telemetry_enabled: Some(true),
-            config_mac: String::new(),
+            ..PhantomConfig::empty()
         })
         .unwrap();
         let r = resolved();
@@ -297,11 +367,8 @@ mod tests {
     fn legacy_config_without_mac_is_accepted() {
         let cfg = PhantomConfig {
             data_dir: Some("/opt/legacy".into()),
-            pipe_name: None,
             log_level: Some("info".into()),
-            license_key: None,
-            telemetry_enabled: None,
-            config_mac: String::new(),
+            ..PhantomConfig::empty()
         };
         assert!(verify(&cfg));
     }
@@ -314,11 +381,7 @@ mod tests {
     fn tampered_data_dir_breaks_mac() {
         let mut cfg = seal(&PhantomConfig {
             data_dir: Some("/genuine/path".into()),
-            pipe_name: None,
-            log_level: None,
-            license_key: None,
-            telemetry_enabled: None,
-            config_mac: String::new(),
+            ..PhantomConfig::empty()
         });
         assert!(verify(&cfg));
         cfg.data_dir = Some("/attacker/path".into());
@@ -328,12 +391,8 @@ mod tests {
     #[test]
     fn tampered_license_key_breaks_mac() {
         let mut cfg = seal(&PhantomConfig {
-            data_dir: None,
-            pipe_name: None,
-            log_level: None,
             license_key: Some("ORIGINAL-KEY".into()),
-            telemetry_enabled: None,
-            config_mac: String::new(),
+            ..PhantomConfig::empty()
         });
         assert!(verify(&cfg));
         cfg.license_key = Some("PLANTED-KEY".into());
@@ -345,13 +404,62 @@ mod tests {
     fn forged_mac_rejected() {
         let mut cfg = seal(&PhantomConfig {
             data_dir: Some("/x".into()),
-            pipe_name: None,
-            log_level: None,
-            license_key: None,
-            telemetry_enabled: None,
-            config_mac: String::new(),
+            ..PhantomConfig::empty()
         });
         cfg.config_mac = "00".repeat(32);
         assert!(!verify(&cfg));
+    }
+
+    // Acknowledgment gating: the phone-home is inactive until the
+    // notice has been accepted for the current version.
+    #[test]
+    fn phone_home_inactive_without_acknowledgment() {
+        let cfg = PhantomConfig {
+            phone_home_url: Some("https://example.invalid/cb".into()),
+            phone_home_enabled: Some(true),
+            ..PhantomConfig::empty()
+        };
+        assert!(!cfg.phone_home_active());
+    }
+
+    #[test]
+    fn phone_home_active_after_acknowledgment() {
+        let cfg = PhantomConfig {
+            phone_home_url: Some("https://example.invalid/cb".into()),
+            phone_home_enabled: Some(true),
+            privacy_notice_version_accepted: Some(phantom_license::legal::PRIVACY_NOTICE_VERSION),
+            privacy_notice_acknowledged_at: Some(1_700_000_000),
+            ..PhantomConfig::empty()
+        };
+        assert!(cfg.phone_home_active());
+    }
+
+    // Explicit opt-out overrides an acknowledged state.
+    #[test]
+    fn explicit_disable_beats_acknowledgment() {
+        let cfg = PhantomConfig {
+            phone_home_url: Some("https://example.invalid/cb".into()),
+            phone_home_enabled: Some(false),
+            privacy_notice_version_accepted: Some(phantom_license::legal::PRIVACY_NOTICE_VERSION),
+            privacy_notice_acknowledged_at: Some(1_700_000_000),
+            ..PhantomConfig::empty()
+        };
+        assert!(!cfg.phone_home_active());
+    }
+
+    // A future version bump invalidates a stale acknowledgment.
+    #[test]
+    fn stale_notice_version_requires_reacknowledgment() {
+        let cfg = PhantomConfig {
+            phone_home_url: Some("https://example.invalid/cb".into()),
+            phone_home_enabled: Some(true),
+            // Pretend the user only ever accepted v0; the shipping
+            // version is >= 1.
+            privacy_notice_version_accepted: Some(0),
+            privacy_notice_acknowledged_at: Some(1_700_000_000),
+            ..PhantomConfig::empty()
+        };
+        assert!(!cfg.privacy_notice_current());
+        assert!(!cfg.phone_home_active());
     }
 }

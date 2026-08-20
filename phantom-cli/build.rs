@@ -51,6 +51,16 @@ fn main() {
         std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into())
     );
 
+    // Optional vendor-baked default phone-home URL. Set at build
+    // time via `PHANTOM_DEFAULT_PHONE_HOME_URL=https://... cargo
+    // build --release` for a release intended to call home by
+    // default. Unset in dev builds so `option_env!` returns None
+    // and the tool ships with no baked endpoint.
+    if let Ok(url) = std::env::var("PHANTOM_DEFAULT_PHONE_HOME_URL") {
+        println!("cargo:rustc-env=PHANTOM_DEFAULT_PHONE_HOME_URL={}", url);
+    }
+    println!("cargo:rerun-if-env-changed=PHANTOM_DEFAULT_PHONE_HOME_URL");
+
     // Rerun if the git HEAD moves or the index changes.
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/index");

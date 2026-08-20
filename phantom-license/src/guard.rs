@@ -1,13 +1,54 @@
 use crate::fingerprint::MachineFingerprint;
 use crate::integrity;
 use crate::key::{validate_license_key, License, LicenseError, LicenseTier};
+use crate::keys;
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::path::PathBuf;
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredLicense {
     key: String,
     activated_at: u64,
+    /// HMAC-SHA256 over `key` + LE bytes of `activated_at`, using the
+    /// STATE_PURPOSE subkey. Prevents field tampering (e.g. rewriting
+    /// `activated_at` on a machine where the anchor already advanced,
+    /// or pasting in an unrelated key). Older records without this
+    /// field are accepted for one migration cycle and re-signed on
+    /// next save.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    state_mac: String,
+}
+
+fn compute_state_mac(key: &str, activated_at: u64) -> String {
+    let sk = keys::derive_key(keys::STATE_PURPOSE);
+    let mut mac = HmacSha256::new_from_slice(&sk).expect("HMAC key length is fixed");
+    mac.update(key.as_bytes());
+    mac.update(&activated_at.to_le_bytes());
+    let bytes = mac.finalize().into_bytes();
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn verify_state_mac(stored: &StoredLicense) -> bool {
+    if stored.state_mac.is_empty() {
+        // Legacy record from before the state MAC existed. Accept once;
+        // it will be re-signed on the next activation cycle.
+        return true;
+    }
+    let expected = compute_state_mac(&stored.key, stored.activated_at);
+    let a = expected.as_bytes();
+    let b = stored.state_mac.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 pub struct LicenseGuard {
@@ -40,15 +81,17 @@ impl LicenseGuard {
 
         if let Ok(data) = std::fs::read_to_string(&path) {
             if let Ok(stored) = serde_json::from_str::<StoredLicense>(&data) {
-                if let Ok(license) = validate_license_key(&stored.key) {
-                    let fp = MachineFingerprint::collect();
-                    if license.is_bound_to(&fp) && !license.is_expired() {
-                        let tier = license.tier;
-                        return LicenseGuard {
-                            license: Some(license),
-                            tier,
-                            key_str: Some(stored.key),
-                        };
+                if verify_state_mac(&stored) {
+                    if let Ok(license) = validate_license_key(&stored.key) {
+                        let fp = MachineFingerprint::collect();
+                        if license.is_bound_to(&fp) && !license.is_expired() {
+                            let tier = license.tier;
+                            return LicenseGuard {
+                                license: Some(license),
+                                tier,
+                                key_str: Some(stored.key),
+                            };
+                        }
                     }
                 }
             }
@@ -78,13 +121,15 @@ impl LicenseGuard {
         }
 
         let tier = license.tier;
+        let activated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
 
         let stored = StoredLicense {
             key: key_str.to_string(),
-            activated_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
+            activated_at,
+            state_mac: compute_state_mac(key_str, activated_at),
         };
 
         let path = license_file_path();
@@ -215,5 +260,57 @@ mod tests {
         assert!(guard.check_profile_limit(0).is_ok());
         assert!(guard.check_profile_limit(1).is_ok());
         assert!(guard.check_profile_limit(2).is_err());
+    }
+
+    // A record with a MAC that matches the (key, activated_at) pair
+    // verifies. Regression guard.
+    #[test]
+    fn state_mac_valid_record_verifies() {
+        let stored = StoredLicense {
+            key: "PHNTM-TEST-KEY".into(),
+            activated_at: 1_700_000_000,
+            state_mac: compute_state_mac("PHNTM-TEST-KEY", 1_700_000_000),
+        };
+        assert!(verify_state_mac(&stored));
+    }
+
+    // Rewriting activated_at without recomputing the MAC must fail.
+    // Prevents an attacker from ageing the record forward to escape
+    // the time anchor grace window, or backward to earn free days.
+    #[test]
+    fn state_mac_tampered_activated_at_rejected() {
+        let mac = compute_state_mac("PHNTM-TEST-KEY", 1_700_000_000);
+        let tampered = StoredLicense {
+            key: "PHNTM-TEST-KEY".into(),
+            activated_at: 1_800_000_000, // moved forward
+            state_mac: mac,
+        };
+        assert!(!verify_state_mac(&tampered));
+    }
+
+    // Swapping the license key while keeping the old MAC must fail.
+    #[test]
+    fn state_mac_swapped_key_rejected() {
+        let mac = compute_state_mac("ORIGINAL-KEY", 1_700_000_000);
+        let tampered = StoredLicense {
+            key: "REPLACED-KEY".into(),
+            activated_at: 1_700_000_000,
+            state_mac: mac,
+        };
+        assert!(!verify_state_mac(&tampered));
+    }
+
+    // Legacy records (written before Sprint 13) have no state_mac
+    // field and must still load exactly once, so upgrading users
+    // don't get bumped to Free tier on first launch. They will be
+    // re-signed on their next activation.
+    #[test]
+    fn state_mac_absent_is_accepted_for_migration() {
+        let legacy = StoredLicense {
+            key: "LEGACY-KEY".into(),
+            activated_at: 1_700_000_000,
+            state_mac: String::new(),
+        };
+        assert!(verify_state_mac(&legacy));
     }
 }

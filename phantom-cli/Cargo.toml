@@ -5,6 +5,7 @@ edition = "2021"
 description = "Hardware identity privacy tool"
 license = "Proprietary"
 readme = "../README.md"
+build = "build.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

@@ -90,3 +90,12 @@ pub struct ConfigPayload {
     pub config_file: String,
     pub config_file_present: bool,
 }
+
+#[derive(Serialize)]
+pub struct VersionPayload {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub git_commit: &'static str,
+    pub target: &'static str,
+    pub profile: &'static str,
+}

@@ -1,8 +1,8 @@
 use phantom_cli::json_out::{
     ConfigPayload, Envelope, LayerStatus, LicenseStatusPayload, MaxProfiles, ProfileListEntry,
-    StatusPayload,
+    StatusPayload, VersionPayload,
 };
-use phantom_cli::{apply, audit, config, profile, validator};
+use phantom_cli::{apply, audit, build_info, config, profile, validator};
 
 use clap::{Parser, Subcommand};
 
@@ -74,6 +74,9 @@ enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+
+    /// Print detailed version and build information
+    Version,
 }
 
 #[derive(Subcommand)]
@@ -760,6 +763,24 @@ fn main() {
                 }
             }
         },
+
+        Commands::Version => {
+            if cli.json {
+                Envelope::ok(
+                    "version",
+                    VersionPayload {
+                        name: build_info::PKG_NAME,
+                        version: build_info::VERSION,
+                        git_commit: build_info::GIT_COMMIT,
+                        target: build_info::BUILD_TARGET,
+                        profile: build_info::BUILD_PROFILE,
+                    },
+                )
+                .print();
+            } else {
+                println!("{}", build_info::full_version_string());
+            }
+        }
     }
 }
 

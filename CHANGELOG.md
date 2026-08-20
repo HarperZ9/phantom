@@ -43,6 +43,23 @@ All notable changes to Phantom are documented here. Format follows
   signed with it and is now invalid. No customer licenses were issued
   under it, so no field migration is required.
 
+### Changed — Sprint 13: state integrity + build info
+- **License state file is HMAC-signed.** `<data_dir>/.license.json`
+  now carries a `state_mac` field over `(key, activated_at)` using the
+  STATE_PURPOSE subkey. Rewriting `activated_at` (to age the record
+  forward past the time anchor grace, or backward to earn free days)
+  or swapping in an unrelated key both fail the MAC. Legacy records
+  without the field load once for migration and are re-signed.
+- **Build metadata baked in.** `phantom-cli/build.rs` reads the git
+  short SHA, target triple, and cargo profile at compile time and
+  exposes them via the new `phantom version` subcommand and the
+  `--json version` payload. A `-dirty` suffix flags builds from a
+  worktree with uncommitted changes.
+
+### Added
+- `phantom version` and `phantom --json version`
+- `phantom_cli::build_info` module surfacing all compile-time metadata
+
 ## [0.5.0] — Sprint 10
 
 ### Added

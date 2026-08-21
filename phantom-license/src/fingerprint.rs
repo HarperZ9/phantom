@@ -111,6 +111,7 @@ impl MachineFingerprint {
 
 #[cfg(windows)]
 fn read_registry_string(subkey: &str, value_name: &str) -> Option<String> {
+    #[link(name = "advapi32")]
     extern "system" {
         fn RegOpenKeyExA(
             hKey: isize,

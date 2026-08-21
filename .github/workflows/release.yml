@@ -140,8 +140,10 @@ jobs:
           # separately; build.cmd is still the source of truth for
           # local dev, where filename == ProductVersion is fine.
           if (-not (Test-Path out)) { New-Item -ItemType Directory out | Out-Null }
+          $buildDir = "..\target\${{ matrix.target }}\release"
           candle.exe -nologo -ext WixUtilExtension -ext WixUIExtension -arch x64 `
             -dProductVersion="$productVersion" `
+            -dBuildDir="$buildDir" `
             -out "out\phantom.wixobj" phantom.wxs
           if ($LASTEXITCODE -ne 0) { throw 'candle failed' }
           light.exe -nologo -ext WixUtilExtension -ext WixUIExtension -cultures:en-us `

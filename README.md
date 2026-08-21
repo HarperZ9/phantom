@@ -1,268 +1,232 @@
 # Phantom
 
-Hardware identity privacy tool.
+Hardware identity privacy for Windows.
 
-Phantom generates realistic, internally-consistent hardware identity profiles and applies them across multiple system layers — giving users control over what their machine reports to software.
+Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, and Windows registry GUIDs. Software uses these to fingerprint your device, track you across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
 
-## Why
+Phantom lets you control what identity your machine presents. It generates realistic, vendor-accurate hardware profiles and applies them across multiple system layers, from the Windows registry up through kernel drivers and into UEFI firmware.
 
-Every application on your machine can silently read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, Windows registry GUIDs, and more. These identifiers enable:
+## Getting Started
 
-- **Cross-application device fingerprinting** — correlating your activity across unrelated software
-- **Persistent tracking across reinstalls** — hardware IDs survive OS reinstallation
-- **Hardware-level profiling** — building a permanent device dossier without your knowledge
+### 1. Download
 
-Phantom lets you decide what identity your hardware presents.
+Download the latest MSI installer from [Releases](https://github.com/HarperZ9/phantom/releases).
 
-## Features
-
-- **Consistent profile generation** — a single seed produces a deterministic, internally-consistent identity across all 22+ identifier vectors. Same seed, same identity, every time.
-- **Vendor-accurate identifiers** — generated serials, MACs, and device IDs match real manufacturer formats (Samsung disk serials look like Samsung serials, Intel MACs use real Intel OUI prefixes).
-- **Cross-source validation** — queries every identifier source the same way fingerprinting software does, reports any inconsistencies before you go live.
-- **Hardware audit** — read-only mode that reports exactly what your machine currently exposes, without changing anything.
-- **Profile management** — save, load, export, import, and share named profiles as portable JSON.
-- **Layered architecture** — apply spoofing at the level you need:
-  - **Layer 0** — UEFI/DXE firmware (SMBIOS in physical memory)
-  - **Layer 1** — Kernel driver (disk, NIC, GPU, TPM interception)
-  - **Layer 2** — Registry and userland (MachineGuid, HwProfileGuid, ComputerName, etc.)
-- **Backup and revert** — original values are backed up before modification and can be restored with one command.
-
-## Quick Start
+Verify the download against the `SHA256SUMS.txt` file included in the release:
 
 ```bash
-# See what your machine currently exposes
+certutil -hashfile PhantomSetup-v1.0.0.msi SHA256
+```
+
+Compare the output to the corresponding line in `SHA256SUMS.txt`.
+
+### 2. Install
+
+Double-click the MSI. Accept the UAC prompt and the license agreement. Installation takes under 30 seconds.
+
+The installer places three components into `C:\Program Files\Phantom\`:
+
+| Component | Purpose |
+|-----------|---------|
+| `phantom.exe` | CLI for profile management, auditing, and configuration |
+| `phantom-svc.exe` | Background service that orchestrates identity layers |
+| `phantom-tray.exe` | System tray app with status indicator and profile switching |
+
+The background service starts automatically. The tray app launches on login.
+
+### 3. Verify installation
+
+Open a terminal and run:
+
+```bash
+phantom --version
+```
+
+Expected output: `phantom 1.0.0` (or the version you installed).
+
+Check that the service is running:
+
+```bash
+sc query PhantomService
+```
+
+The state should read `RUNNING`.
+
+### 4. Audit your current exposure
+
+Before changing anything, see what your machine currently reveals:
+
+```bash
 phantom audit
+```
 
-# Generate a privacy profile
-phantom profile generate my-profile --seed "any-memorable-string"
+This prints every hardware identifier that software can read, organized by category (SMBIOS, disk, network, GPU, TPM, display, Windows registry). Nothing is modified.
 
-# Inspect it
-phantom profile show my-profile
+### 5. Activate a license
 
-# Apply registry-level spoofing
+Phantom works in Free tier immediately after installation. To unlock all layers and features, activate a license key:
+
+```bash
+phantom license activate <your-key>
+```
+
+You'll be prompted to accept the Terms of Use and Privacy Notice. Type `agree` at each prompt.
+
+Check your license status at any time:
+
+```bash
+phantom license status
+```
+
+### 6. Generate and apply a profile
+
+Create a named identity profile:
+
+```bash
+phantom profile generate my-profile
+```
+
+Apply it at Layer 2 (registry-level, available on all tiers):
+
+```bash
 phantom apply my-profile --layers 2
+```
 
-# Verify consistency
-phantom validate my-profile
+With a Pro or Enterprise license, apply across all layers:
 
-# Restore originals
+```bash
+phantom apply my-profile --layers 0,1,2
+```
+
+### 7. Validate
+
+Confirm that every identifier source reports consistently:
+
+```bash
+phantom validate
+```
+
+All fields should show green. Any inconsistency between sources is flagged.
+
+### 8. Revert
+
+Restore your machine to its original hardware identity at any time:
+
+```bash
 phantom revert
 ```
 
+Original values are backed up before every apply and restored exactly.
+
+## License Tiers
+
+| | Free | Pro | Enterprise |
+|---|---|---|---|
+| Layer 2 (registry) | Yes | Yes | Yes |
+| Layer 1 (kernel driver) | | Yes | Yes |
+| Layer 0 (UEFI firmware) | | Yes | Yes |
+| Background service | | Yes | Yes |
+| Saved profiles | 2 | 50 | Unlimited |
+| Profile quick-switch (tray) | | Yes | Yes |
+| Phone-home opt-out | | Yes | Yes |
+| Machine-bound activation | | Yes | Yes |
+
+**Free** works out of the box with no license key. It covers Windows registry identifiers (MachineGuid, HwProfileGuid, MachineId, ProductId, ComputerName, InstallDate) and gives you two saved profiles.
+
+**Pro** unlocks all three identity layers, the background service for persistent protection across reboots, and up to 50 profiles.
+
+**Enterprise** removes all limits. Volume licensing and centralized deployment via SCCM, GPO, or Ansible are supported through the `PHANTOM_DATA_DIR` environment variable and a managed `config.json`.
+
+To purchase a license, contact [licensing@phantom.dev](mailto:licensing@phantom.dev).
+
 ## Identifier Coverage
+
+Phantom covers 22+ identifier vectors across six hardware categories:
 
 | Category | Identifiers | Layer |
 |----------|------------|-------|
 | SMBIOS | Board serial, BIOS UUID, system serial, chassis asset tag, manufacturer, product name | 0 |
-| Disk | ATA serial, model string, firmware revision | 1 |
-| Storage | Storage query serial, volume serial, volume GUID | 1+2 |
-| Network | Permanent MAC, current MAC, adapter GUID (per-adapter) | 1+2 |
+| Disk | ATA serial, model string, firmware revision, storage query serial, volume serial, volume GUID | 1, 2 |
+| Network | Permanent MAC, current MAC, adapter GUID (per-adapter) | 1, 2 |
 | GPU | PCI vendor/device ID, PnP instance ID, driver key GUID | 1 |
 | TPM | Module serial, manufacturer ID | 1 |
 | Display | EDID serial, manufacturer code, product code | 1 |
 | Windows | MachineGuid, HwProfileGuid, MachineId, ProductId, InstallDate, ComputerName | 2 |
 | Boot | BCD identifier GUID, boot disk signature | 2 |
 
-## Architecture
+Generated identifiers are vendor-accurate. Samsung disk serials match Samsung's format. Intel MACs use real Intel OUI prefixes. A single seed produces a deterministic, internally consistent identity across every vector.
 
-```
-phantom-cli        Rust CLI + library — profile management, validation, reporting
-phantom-ipc        Rust shared crate — named-pipe IPC protocol (message types + wire format)
-phantom-svc        Rust Windows service — background orchestrator, listens on named pipe
-phantom-tray       Rust system tray app — shield icon, status popup, toast notifications
-phantom-installer  WiX MSI installer — service, tray, driver, auto-start, clean uninstall
-phantom-driver     C kernel filter driver — Layer 1 interception
-phantom-dxe        C UEFI DXE application — Layer 0 firmware patching
-```
-
-The CLI, IPC protocol, and profile engine run on any platform. The service, Layer 1, and Layer 2 apply operations are Windows-specific. Layer 0 requires UEFI with Secure Boot disabled.
-
-### Service Architecture
-
-```
-                    ┌──────────────┐
-                    │  phantom-svc │  ← Windows service (always-on)
-                    │  NamedPipe   │
-                    └──────┬───────┘
-                           │ IPC (length-prefixed JSON)
-              ┌────────────┼────────────┐
-              │            │            │
-     ┌────────┴───┐  ┌─────┴──────┐  ┌──┴──────────┐
-     │ phantom-cli│  │phantom-tray│  │ other client │
-     │ `service`  │  │ shield UI  │  │              │
-     └────────────┘  └────────────┘  └──────────────┘
-```
-
-The service runs as a background process (standalone or as a Windows service), listens on `\\.\pipe\PhantomService`, and orchestrates apply/revert across all layers. Clients communicate via the phantom-ipc protocol — a 4-byte LE length prefix followed by JSON request/response messages.
-
-## Building
-
-### CLI
+## CLI Reference
 
 ```bash
-cd phantom
-cargo build --release
-```
+# Identity audit (read-only)
+phantom audit
 
-This builds both `phantom-cli` and `phantom-svc`. Binaries are at `target/release/phantom-cli` and `target/release/phantom-svc` (`.exe` on Windows).
+# Profile management
+phantom profile generate <name>
+phantom profile generate <name> --seed "memorable-string"
+phantom profile show <name>
+phantom profile list
+phantom profile export <name> > profile.json
+phantom profile import profile.json
 
-### Kernel Driver (Layer 1)
+# Apply and revert
+phantom apply <name> --layers 2
+phantom apply <name> --layers 0,1,2
+phantom validate
+phantom revert
 
-Requires the Windows Driver Kit (WDK) and Visual Studio with the WDK build tools:
+# License
+phantom license request
+phantom license activate <key>
+phantom license status
 
-```bash
-cd phantom/phantom-driver
-msbuild phantom.vcxproj /p:Configuration=Release /p:Platform=x64
-```
-
-The driver binary is `phantom.sys`. Install via `phantom.inf` (test signing required for unsigned drivers).
-
-### DXE Firmware Module (Layer 0)
-
-Requires the [EDK2](https://github.com/tianocore/edk2) build environment:
-
-```bash
-# From the edk2 root, symlink or copy the phantom-dxe directory
-ln -s /path/to/phantom/phantom-dxe PhantomDxe
-source edksetup.sh
-build -p PhantomDxe/PhantomDxe.dsc -a X64 -t GCC5
-```
-
-The output is `PhantomDxe.efi`. Copy it to the EFI System Partition and configure your firmware to load it as a DXE driver. Requires Secure Boot disabled.
-
-**Usage flow:**
-1. From Windows, run `phantom apply <profile> --layers 0` to write the SMBIOS profile to an EFI NVRAM variable
-2. Reboot — the DXE module reads the variable and rewrites SMBIOS tables in firmware memory
-3. Windows boots with spoofed SMBIOS values visible to all software, including physical memory readers
-
-### Installer
-
-Requires [WiX Toolset v3](https://wixtoolset.org/) and all binaries built:
-
-```bash
-cd phantom/phantom-installer
-build.cmd
-```
-
-The output is `out\PhantomSetup.msi`. The installer:
-
-- Copies `phantom-cli.exe`, `phantom-svc.exe`, and `phantom-tray.exe` to `%ProgramFiles%\Phantom`
-- Installs `PhantomService` as an auto-start Windows service
-- Registers `phantom-tray.exe` for login auto-start
-- Installs the kernel driver via `pnputil`
-- Creates a Start Menu shortcut
-
-On first launch the service auto-generates a `default` identity profile and applies it, so the user is protected before they interact with the tray app.
-
-**Uninstall** reverts all identity layers (registry, kernel, firmware) before removing files, leaving the machine in its original state.
-
-## Profile Format
-
-Profiles are stored as JSON in `%APPDATA%\phantom\profiles\` (Windows) or `~/.config/phantom/profiles/` (Linux/macOS). See `profiles/` for examples.
-
-### Service
-
-```bash
-# Run in standalone mode (foreground, for development)
-phantom-svc --standalone
-
-# Install as a Windows service
-phantom-svc --install
-sc start PhantomService
-
-# Communicate via the CLI
+# Background service
 phantom service ping
 phantom service status
-phantom service protect my-profile --layers 1,2
+phantom service protect <name> --layers 1,2
 phantom service unprotect
 
-# Uninstall the service
-phantom-svc --uninstall
+# Configuration
+phantom config init
+phantom config show
+phantom config set <key> <value>
+phantom config path
+
+# Machine-readable output (stable JSON envelope)
+phantom --json status
+phantom --json audit
+phantom --json license status
+phantom --json profile list
 ```
 
 ## Configuration
 
-Phantom resolves runtime configuration in this order (highest wins):
+Phantom resolves configuration in this order (highest wins):
 
-1. Process environment variables (`PHANTOM_*`)
+1. Environment variables (`PHANTOM_*`)
 2. JSON config file at `$PHANTOM_CONFIG` or `<data_dir>/config.json`
 3. Compiled defaults
 
-### Environment variables
-
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PHANTOM_DATA_DIR` | `%APPDATA%\phantom` (Win) / `~/.config/phantom` (Linux) | Base data directory for profiles, logs, config, and license state |
-| `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named pipe endpoint for IPC |
-| `PHANTOM_LOG_LEVEL` | `info` | Log verbosity (`trace`, `debug`, `info`, `warn`, `error`). Takes priority over `RUST_LOG` |
-| `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate location for the JSON config file |
-| `PHANTOM_TELEMETRY` | `false` | Enable/disable opt-in telemetry (`on`/`off`/`1`/`0`) |
+| `PHANTOM_DATA_DIR` | `%APPDATA%\phantom` | Base directory for profiles, logs, config, and license state |
+| `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named pipe endpoint for service IPC |
+| `PHANTOM_LOG_LEVEL` | `info` | Log verbosity: `trace`, `debug`, `info`, `warn`, `error` |
+| `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate config file location |
+| `PHANTOM_TELEMETRY` | `false` | Opt-in telemetry: `on`/`off`/`1`/`0` |
 
-### Config file
+The config file is plain JSON and safe to deploy through configuration management systems. Enterprise deployments can drop a `config.json` into a managed `PHANTOM_DATA_DIR` for centralized rollout.
 
-```bash
-# Write a default config
-phantom config init
+## Uninstall
 
-# Show the resolved config (env > file > defaults)
-phantom config show
+Uninstall through Settings > Apps or via the MSI. The uninstaller reverts all identity layers (registry, kernel, firmware) before removing files, leaving your machine in its original state.
 
-# Update a single key
-phantom config set log_level debug
+## System Requirements
 
-# Print the file path being used
-phantom config path
-```
-
-The file is plain JSON, hand-editable, and safe to commit into a
-configuration management system (SCCM, GPO, Ansible, container image).
-Enterprise deployments can drop a `config.json` into a managed
-`PHANTOM_DATA_DIR` for centralized rollout.
-
-### Machine-readable output
-
-Every read-heavy command accepts `--json` to emit a stable envelope for
-scripting:
-
-```bash
-phantom --json status
-phantom --json license status
-phantom --json config show
-phantom --json profile list
-```
-
-The envelope is `{ok, command, data | error}` — check `ok` first.
-
-## Project Status
-
-- [x] Profile engine with vendor-accurate generation
-- [x] Profile management (save/load/export/import)
-- [x] Hardware audit (read-only identity report)
-- [x] Cross-source validation (all profile fields covered)
-- [x] Layer 2 registry spoofing (MachineGuid, HwProfileGuid, MachineId, ProductId, ComputerName, InstallDate)
-- [x] Layer 1 kernel driver (disk/NIC/GPU/TPM/EDID filter, timing normalization + calibration)
-- [x] Layer 0 DXE firmware module (SMBIOS rewrite, EFI variable profile store)
-- [x] WDK build system (phantom.vcxproj)
-- [x] Named-pipe IPC protocol (phantom-ipc: message types, wire format, client/server)
-- [x] Background service (phantom-svc: Windows service + standalone mode, request handler)
-- [x] CLI service commands (phantom service ping/status/protect/unprotect)
-- [x] System tray app (phantom-tray: shield icon, status popup, toast, context menu, auto-start)
-- [x] WiX MSI installer (phantom-installer: service + tray + driver install, clean uninstall)
-- [x] First-run auto-generation (service creates default profile on first boot)
-- [x] Config persistence (service remembers active profile across reboots)
-- [x] Profile quick-switch (tray context menu with checkmark + toast confirmation)
-- [x] System identifier readers (SMBIOS parser, disk/network/GPU/display/TPM registry readers)
-- [x] Source key alignment (all reader keys match validation diff map)
-- [x] Service quality (real identifier_count, revert warning propagation)
-- [x] Security hardening (SDDL pipe ACL, CSPRNG seed generation, release profile with LTO)
-- [x] Structured logging (tracing + daily file rotation, PHANTOM_LOG_LEVEL)
-- [x] License system (HMAC-SHA256 keys, machine-bound activation, tier-gated layer access)
-- [x] Anti-tamper (debugger detection, binary integrity checks, constant-time comparison)
-- [x] Enterprise config (PHANTOM_DATA_DIR, PHANTOM_PIPE_NAME, centralized deployment)
-- [x] JSON config file with env-var override precedence (`phantom config` subcommands)
-- [x] Machine-readable `--json` output for status, license, config, profile list
-- [x] GitHub Actions CI (fmt, clippy, cross-platform build+test, cargo-audit)
-- [x] Release workflow (tagged releases → Linux + Windows binary artifacts)
+- Windows 10 22H2 or Windows 11 23H2+
+- Administrator privileges (for service installation and registry/driver operations)
+- Layer 0 requires UEFI with Secure Boot disabled
 
 ## License
 

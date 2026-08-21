@@ -96,8 +96,7 @@
                         Description="Background orchestrator for hardware identity privacy. Manages profile application across the registry layer."
                         Start="auto"
                         Account="LocalSystem"
-                        ErrorControl="normal"
-                        Arguments="" />
+                        ErrorControl="normal" />
         <ServiceControl Id="PhantomSvcControl"
                         Name="PhantomService"
                         Start="install"

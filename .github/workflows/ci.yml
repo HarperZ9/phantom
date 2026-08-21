@@ -73,6 +73,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # build.rs refuses a release build without a seed. This job only
+    # proves the release profile COMPILES, so feed it a fixed throwaway
+    # seed. These binaries are never shipped; the real release build in
+    # release.yml injects the production seed from an org secret.
+    env:
+      PHANTOM_MASTER_SEED: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

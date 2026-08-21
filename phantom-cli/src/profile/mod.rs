@@ -6,15 +6,30 @@ use schema::HardwareProfile;
 use std::fs;
 use std::path::PathBuf;
 
+/// Root of Phantom's on-disk state (profiles, registry backup, sealed
+/// config, license).
+///
+/// On Windows this MUST be a machine-wide location, not per-user
+/// `%APPDATA%`. The elevated-user CLI and the LocalSystem service both
+/// touch this store: the CLI writes the registry backup during `apply`,
+/// and the LocalSystem service reads it during pre-uninstall cleanup to
+/// revert. `%APPDATA%` resolves to a *different* directory for a normal
+/// user (`C:\Users\<u>\AppData\Roaming`) than for LocalSystem
+/// (`C:\Windows\System32\config\systemprofile\AppData\Roaming`), which
+/// split the store in two and left uninstall unable to find the backup —
+/// so the original identity was never restored. `%ProgramData%` resolves
+/// to the same `C:\ProgramData` for every account, giving one shared
+/// store. The installer pre-creates it with a Users-writable ACL so
+/// non-elevated commands (`generate`, `license activate`) still work.
 pub fn data_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("PHANTOM_DATA_DIR") {
         return PathBuf::from(dir);
     }
     if cfg!(windows) {
-        std::env::var("APPDATA")
+        std::env::var("ProgramData")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("phantom")
+            .unwrap_or_else(|_| PathBuf::from(r"C:\ProgramData"))
+            .join("Phantom")
     } else {
         std::env::var("HOME")
             .map(|h| PathBuf::from(h).join(".config"))

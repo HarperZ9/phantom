@@ -400,6 +400,10 @@ fn main() {
 
             let results = apply::apply_profile(&prof, &layers);
             let mut any_failure = false;
+            let mut access_denied = false;
+
+            let looks_like_access_denied =
+                |msg: &str| msg.contains("os error 5") || msg.contains("Access is denied");
 
             for (layer, result) in &results {
                 match result {
@@ -417,11 +421,18 @@ fn main() {
                             any_failure = true;
                             println!("  {} - FAILED", layer.name());
                             for (item, err) in &r.failed {
+                                if looks_like_access_denied(err) {
+                                    access_denied = true;
+                                }
                                 println!("    ! {} : {}", item, err);
                             }
                         }
                     }
                     Err(e) => {
+                        any_failure = true;
+                        if looks_like_access_denied(e) {
+                            access_denied = true;
+                        }
                         println!("  {} - {}", layer.name(), e);
                     }
                 }
@@ -429,10 +440,23 @@ fn main() {
 
             println!();
             if any_failure {
-                eprintln!(
-                    "  Some operations failed. Run 'phantom validate {}' to check consistency.",
-                    name
-                );
+                if access_denied {
+                    // Writing HKLM identity keys needs an elevated token.
+                    // Surface that plainly instead of leaving the operator
+                    // to decode a wall of "Access is denied (os error 5)".
+                    eprintln!(
+                        "  Access denied. `phantom apply` writes machine-wide registry keys and"
+                    );
+                    eprintln!(
+                        "  must run elevated. Re-run from an Administrator terminal (right-click"
+                    );
+                    eprintln!("  > Run as administrator).");
+                } else {
+                    eprintln!(
+                        "  Some operations failed. Run 'phantom validate {}' to check consistency.",
+                        name
+                    );
+                }
                 std::process::exit(1);
             } else {
                 println!(

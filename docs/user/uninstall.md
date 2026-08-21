@@ -62,13 +62,14 @@ Should report `File Not Found`.
 
 By default the uninstall removes program files and the service, but
 leaves your **profiles, license record, and configuration** under
-`%APPDATA%\Phantom\`. This is deliberate: reinstalling picks your
-setup back up exactly where you left it.
+`%ProgramData%\Phantom\`. This is deliberate: reinstalling picks your
+setup back up exactly where you left it. (The registry backup itself is
+consumed by the revert above, so no spoofed values linger.)
 
 To wipe everything, including your license:
 
 ```
-rmdir /s /q "%APPDATA%\Phantom"
+rmdir /s /q "%ProgramData%\Phantom"
 ```
 
 Warning: this deletes your license activation record. You will need

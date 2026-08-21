@@ -6,9 +6,41 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
-## [1.0.0] — v1.0 GA
+### Fixed — rc1 dogfood blockers
+- **Uninstall now restores the original hardware identity (Sev-1).** The
+  registry backup and profile store moved from per-user `%APPDATA%` to
+  the machine-wide `%ProgramData%\Phantom`. The elevated-user CLI and the
+  LocalSystem service now share one store, so the pre-uninstall cleanup
+  (which runs as LocalSystem) can read the backup the CLI wrote and revert
+  `MachineGuid` et al. to their true originals. Previously the two
+  resolved `%APPDATA%` to different directories, the cleanup never found
+  the backup, and uninstall left the machine with a changed identity.
+  `backup_path()` now derives from `data_dir()` and honors
+  `PHANTOM_DATA_DIR`. The installer pre-creates the store with a Users
+  ACL so non-elevated `generate` / `license activate` still write.
+- **The service no longer spoofs on its own (Sev-1).** Removed the
+  first-run path that minted a random `default` profile and applied it at
+  service start with no license check and no consent. The service now
+  only re-applies a profile an operator explicitly applied (persistence
+  across reboot); a fresh install stays unprotected until an explicit,
+  licensed `apply`.
+- **ComputerName is no longer spoofed at Layer 2 (Sev-2).** Writing only
+  the two ComputerName registry values desynced the machine name and
+  broke `shutdown`, `Restart-Computer`, and WMI. Spoofing it safely needs
+  a full rename across Netbt/Tcpip/Hostname plus a reboot, which is out of
+  Layer-2 scope; it is deferred.
+- `phantom apply` prints a clear "run elevated" message when it hits
+  access-denied, instead of a wall of `os error 5` lines.
+- `phantom revert` deletes the registry backup once every value is
+  restored, so `phantom status` reports the original state (not
+  "profile applied") and a later apply starts from a clean baseline.
+- Docs corrected to match: data location (`%ProgramData%\Phantom`),
+  the Layer-2 identifier set (no ComputerName), the no-auto-apply service
+  behavior, and the activation prompt (`y`, not `agree`).
 
-**Phantom's first customer-facing release.** A Windows MSI installer,
+## [1.0.0-rc1] — prerelease
+
+**Phantom's first customer-facing prerelease.** A Windows MSI installer,
 a signed release build, a live license issuance pipeline behind a
 Cloudflare Worker, and end-to-end docs covering purchase, install,
 activation, first profile, and clean uninstall. Everything below is
@@ -16,9 +48,10 @@ new **on the v1.0 release path**; the underlying code work landed
 across Sprints 12–21 (see prior entries).
 
 ### Added — Sprint 22 (Windows CI + Layer-2 validation)
-- Windows CI green on `test (windows-latest)` and
-  `release build (windows-latest)`. Fixes for winreg `&&String` deref
-  and phantom-tray gdi32/user32/shell32/advapi32 linker resolution.
+- Windows CI jobs for `test (windows-latest)` and
+  `release build (windows-latest)`. The current rc1 commit is not
+  cleared as green: rustfmt, Windows tests, and release-build evidence
+  must pass on the represented commit before any production claim.
 - `docs/windows-runbook.md`: minimum reproducible Layer-2 apply /
   validate / revert flow on a fresh Windows image.
 
@@ -77,7 +110,7 @@ across Sprints 12–21 (see prior entries).
   reverts-layers (Sev-1 gate), downgrade refusal, cancel-mid-install
   rollback.
 
-### Added — Sprint 27 (v1.0.0 GA rehearsal)
+### Added — Sprint 27 (v1.0.0-rc1 rehearsal)
 - All workspace crates bumped 0.6.0 → 1.0.0. Installer's
   `ProductVersion` and `build.cmd` default likewise.
 - Release workflow now handles prerelease tags (`v1.0.0-rc1` etc.):

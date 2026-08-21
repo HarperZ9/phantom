@@ -31,7 +31,7 @@ phantom profile generate my-profile
 
 This creates a new, random identity — a fresh MachineGuid, a
 plausible OEM brand string, believable NIC vendor prefixes, etc. —
-and saves it under `%APPDATA%\Phantom\profiles\my-profile.json`.
+and saves it under `%ProgramData%\Phantom\profiles\my-profile.json`.
 
 `generate` does **not** apply the profile yet. You can list what
 you have, inspect it, or generate several and pick the one you
@@ -59,10 +59,10 @@ The command runs synchronously and reports what changed:
 ```
 Applied 'my-profile' at layer 2 (registry).
   HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid ← <new-guid>
-  HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Hostname ← ...
-  [12 more]
+  HKLM\SOFTWARE\Microsoft\SQMClient\MachineId ← <new-id>
+  [3 more]
 
-Backup written to %APPDATA%\Phantom\backup\pre-my-profile.reg
+Backup written to %ProgramData%\Phantom\backup.json
 Reboot recommended for changes to fully propagate.
 ```
 
@@ -97,15 +97,15 @@ every value byte-for-byte. Reboot again for good measure.
 
 ## Common patterns
 
-**Switch between two personas.** Generate two profiles, then
-`phantom apply persona-a --layers 2` or `persona-b`. Each apply
+**Switch between two lab profiles.** Generate two profiles, then
+`phantom apply lab-a --layers 2` or `lab-b`. Each apply
 first reverts the previous profile from backup, then applies the new
 one — the two profiles don't corrupt each other.
 
-**Roll a fresh identity daily.** `phantom profile generate rolling`
-overwrites the same slot with a new random identity. Combined with
-`phantom apply rolling --layers 2` in a scheduled task, you get a
-daily-rotating identity.
+**Regenerate a lab profile.** `phantom profile generate rolling`
+overwrites the same slot with a new random identity. Validate backup,
+apply, and revert manually on a disposable test image before adding
+any scheduled workflow.
 
 **Inspect what an existing profile actually contains.**
 `phantom profile show my-profile --json` dumps the whole record;
@@ -115,12 +115,13 @@ pipe to `jq` if you want to grep by field.
 
 - **Layer 1** — kernel filter driver that intercepts identifier
   reads at the syscall boundary. Blocks applications that read raw
-  device serials Phantom cannot mask from user mode. In WHQL
-  submission; ships in v2.
+  device serials Phantom cannot mask from user mode. Deferred; it is
+  not installed by the current MSI.
 - **Layer 0** — UEFI/DXE hooks for pre-boot identity. Niche;
-  shipping later.
+  deferred and not included in the current MSI.
 
-For v1, Layer 2 covers ~95% of what commercial applications look at.
+No externally representative application-coverage percentage has
+been established for rc1.
 
 ## Troubleshooting
 
@@ -139,5 +140,6 @@ is on the roadmap.
 
 - Read `phantom --help` for the full command surface.
 - Run `phantom privacy-notice` any time to reread what phones home.
-- [Uninstall](uninstall.md) reverts every applied layer before
-  removing files — a clean uninstall leaves no trace.
+- [Uninstall](uninstall.md) describes the intended Layer-2 cleanup
+  path. Verify it on a disposable Windows test image before relying
+  on it.

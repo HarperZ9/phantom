@@ -61,17 +61,16 @@ pub struct RegistryBackupEntry {
     pub original_value: String,
 }
 
+/// Path to the registry backup written on `apply` and read on `revert`
+/// / pre-uninstall cleanup.
+///
+/// Derived from [`crate::profile::data_dir`] so it lives in the SAME
+/// machine-wide store as everything else and honors `PHANTOM_DATA_DIR`.
+/// Previously this computed its own per-user `%APPDATA%` base, which the
+/// LocalSystem uninstall cleanup could not read — the root cause of
+/// uninstall failing to restore the original identity.
 pub fn backup_path() -> std::path::PathBuf {
-    let base = if cfg!(windows) {
-        std::env::var("APPDATA")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::path::PathBuf::from("."))
-    } else {
-        std::env::var("HOME")
-            .map(|h| std::path::PathBuf::from(h).join(".config"))
-            .unwrap_or_else(|_| std::path::PathBuf::from("."))
-    };
-    base.join("phantom").join("backup.json")
+    crate::profile::data_dir().join("backup.json")
 }
 
 pub fn save_backup(backup: &RegistryBackup) -> std::io::Result<()> {
@@ -90,6 +89,41 @@ pub fn load_backup() -> std::io::Result<RegistryBackup> {
     serde_json::from_str(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
+/// Reads the spoofed string value for one identifier out of a profile.
+type ProfileField = fn(&HardwareProfile) -> String;
+
+/// The Layer-2 registry string identifiers Phantom spoofs, as
+/// `(key path, value name, profile field)`.
+///
+/// ComputerName is deliberately ABSENT. Writing only the two ComputerName
+/// registry values (`Control\ComputerName\{ComputerName,ActiveComputerName}`)
+/// desyncs the machine name from the many other places Windows records it
+/// (Netbt, `Tcpip\Parameters\Hostname` / `NV Hostname`, the Kerberos /
+/// NetBIOS name). That half-rename breaks `shutdown`, `Restart-Computer`,
+/// and WMI's local connection until reverted. A safe rename touches all of
+/// those and requires a reboot, which is out of scope for the Layer-2
+/// registry tool. Reinstate ComputerName here only alongside a full,
+/// reboot-completed rename implementation. `registry_targets_exclude_computer_name`
+/// guards against a silent re-add.
+const STRING_TARGETS: &[(&str, &str, ProfileField)] = &[
+    (r"SOFTWARE\Microsoft\Cryptography", "MachineGuid", |p| {
+        p.os.machine_guid.clone()
+    }),
+    (
+        r"SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001",
+        "HwProfileGuid",
+        |p| p.os.hw_profile_guid.clone(),
+    ),
+    (r"SOFTWARE\Microsoft\SQMClient", "MachineId", |p| {
+        p.os.machine_id.clone()
+    }),
+    (
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+        "ProductId",
+        |p| p.os.product_id.clone(),
+    ),
+];
+
 #[cfg(windows)]
 fn apply_registry_windows(profile: &HardwareProfile) -> ApplyResult {
     use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_ALL_ACCESS};
@@ -100,40 +134,8 @@ fn apply_registry_windows(profile: &HardwareProfile) -> ApplyResult {
     let mut failed = Vec::new();
     let mut backup_entries = Vec::new();
 
-    let string_entries = [
-        (
-            r"SOFTWARE\Microsoft\Cryptography",
-            "MachineGuid",
-            &profile.os.machine_guid,
-        ),
-        (
-            r"SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001",
-            "HwProfileGuid",
-            &profile.os.hw_profile_guid,
-        ),
-        (
-            r"SOFTWARE\Microsoft\SQMClient",
-            "MachineId",
-            &profile.os.machine_id,
-        ),
-        (
-            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-            "ProductId",
-            &profile.os.product_id,
-        ),
-        (
-            r"SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName",
-            "ComputerName",
-            &profile.os.computer_name,
-        ),
-        (
-            r"SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName",
-            "ComputerName",
-            &profile.os.computer_name,
-        ),
-    ];
-
-    for (path, name, new_value) in &string_entries {
+    for (path, name, field) in STRING_TARGETS {
+        let new_value = field(profile);
         match hklm.open_subkey_with_flags(path, KEY_ALL_ACCESS) {
             Ok(key) => {
                 if let Ok(old_value) = key.get_value::<String, _>(name) {
@@ -143,10 +145,7 @@ fn apply_registry_windows(profile: &HardwareProfile) -> ApplyResult {
                         original_value: old_value,
                     });
                 }
-                // *new_value gives &String — winreg's set_value takes
-                // value: &T where T: ToRegValue; ToRegValue is impl'd
-                // for String but not &String, so we deref one level.
-                match key.set_value(name, *new_value) {
+                match key.set_value(name, &new_value) {
                     Ok(_) => applied.push(format!("{}\\{}", path, name)),
                     Err(e) => failed.push((format!("{}\\{}", path, name), e.to_string())),
                 }
@@ -222,5 +221,52 @@ fn revert_registry_windows(backup: &RegistryBackup) -> ApplyResult {
         applied,
         failed,
         skipped: Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ComputerName spoofing at Layer 2 breaks reboot and WMI (rc1
+    /// dogfood Sev-2). It must never reappear in the applied set without
+    /// a full rename implementation.
+    #[test]
+    fn registry_targets_exclude_computer_name() {
+        for (path, name, _) in STRING_TARGETS {
+            assert_ne!(
+                *name, "ComputerName",
+                "ComputerName must not be a Layer-2 spoof target (breaks reboot/WMI)"
+            );
+            assert!(
+                !path.contains("ComputerName"),
+                "no target may write under the ComputerName key: {}",
+                path
+            );
+        }
+    }
+
+    /// The safe identifiers must stay present, so the table can't be
+    /// silently emptied.
+    #[test]
+    fn registry_targets_cover_core_identifiers() {
+        let names: Vec<&str> = STRING_TARGETS.iter().map(|(_, n, _)| *n).collect();
+        for expected in ["MachineGuid", "HwProfileGuid", "MachineId", "ProductId"] {
+            assert!(names.contains(&expected), "missing target: {}", expected);
+        }
+    }
+
+    /// The registry backup must live in the SAME machine-wide store as
+    /// everything else. If it drifts to a per-user base again, the
+    /// LocalSystem uninstall cleanup can't read it and the original
+    /// identity is never restored (rc1 dogfood Bug A).
+    #[test]
+    fn backup_path_is_inside_data_dir() {
+        let expected = crate::profile::data_dir().join("backup.json");
+        assert_eq!(backup_path(), expected);
+        assert_eq!(
+            backup_path().parent(),
+            Some(crate::profile::data_dir().as_path())
+        );
     }
 }

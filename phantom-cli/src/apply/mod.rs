@@ -76,10 +76,17 @@ pub fn revert_all() -> Vec<(Layer, Result<registry::ApplyResult, String>)> {
 
     match registry::load_backup() {
         Ok(backup) => {
-            results.push((
-                Layer::Userland,
-                Ok(registry::revert_registry_layer(&backup)),
-            ));
+            let result = registry::revert_registry_layer(&backup);
+            let fully_reverted = result.failed.is_empty();
+            results.push((Layer::Userland, Ok(result)));
+            // Once every original value is restored, the backup has served
+            // its purpose. Remove it so `status` reports "original state"
+            // rather than "profile applied", and so a later apply starts
+            // from a clean baseline. Keep it if any key failed to revert,
+            // so the revert can be retried.
+            if fully_reverted {
+                let _ = std::fs::remove_file(registry::backup_path());
+            }
         }
         Err(e) => {
             results.push((Layer::Userland, Err(format!("No backup found: {}", e))));

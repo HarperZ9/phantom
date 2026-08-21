@@ -121,14 +121,20 @@ fn parse_tier(s: &str) -> Result<LicenseTier, String> {
         "free" => Ok(LicenseTier::Free),
         "pro" => Ok(LicenseTier::Pro),
         "enterprise" | "ent" => Ok(LicenseTier::Enterprise),
-        other => Err(format!("unknown tier '{}' (want free|pro|enterprise)", other)),
+        other => Err(format!(
+            "unknown tier '{}' (want free|pro|enterprise)",
+            other
+        )),
     }
 }
 
 fn parse_fingerprint(hex: &str) -> Result<[u8; 16], String> {
     let clean: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
     if clean.len() != 32 {
-        return Err(format!("fingerprint must be 32 hex chars, got {}", clean.len()));
+        return Err(format!(
+            "fingerprint must be 32 hex chars, got {}",
+            clean.len()
+        ));
     }
     let mut out = [0u8; 16];
     for i in 0..16 {
@@ -262,7 +268,11 @@ fn cmd_decode(key: &str, json: bool) {
                 }
                 println!(
                     "status            : {}",
-                    if license.is_expired() { "EXPIRED" } else { "valid" }
+                    if license.is_expired() {
+                        "EXPIRED"
+                    } else {
+                        "valid"
+                    }
                 );
             }
         }

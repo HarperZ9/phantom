@@ -6,9 +6,9 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
-## [1.0.0] — v1.0 GA
+## [1.0.0-rc1] — prerelease
 
-**Phantom's first customer-facing release.** A Windows MSI installer,
+**Phantom's first customer-facing prerelease.** A Windows MSI installer,
 a signed release build, a live license issuance pipeline behind a
 Cloudflare Worker, and end-to-end docs covering purchase, install,
 activation, first profile, and clean uninstall. Everything below is
@@ -16,9 +16,10 @@ new **on the v1.0 release path**; the underlying code work landed
 across Sprints 12–21 (see prior entries).
 
 ### Added — Sprint 22 (Windows CI + Layer-2 validation)
-- Windows CI green on `test (windows-latest)` and
-  `release build (windows-latest)`. Fixes for winreg `&&String` deref
-  and phantom-tray gdi32/user32/shell32/advapi32 linker resolution.
+- Windows CI jobs for `test (windows-latest)` and
+  `release build (windows-latest)`. The current rc1 commit is not
+  cleared as green: rustfmt, Windows tests, and release-build evidence
+  must pass on the represented commit before any production claim.
 - `docs/windows-runbook.md`: minimum reproducible Layer-2 apply /
   validate / revert flow on a fresh Windows image.
 
@@ -77,7 +78,7 @@ across Sprints 12–21 (see prior entries).
   reverts-layers (Sev-1 gate), downgrade refusal, cancel-mid-install
   rollback.
 
-### Added — Sprint 27 (v1.0.0 GA rehearsal)
+### Added — Sprint 27 (v1.0.0-rc1 rehearsal)
 - All workspace crates bumped 0.6.0 → 1.0.0. Installer's
   `ProductVersion` and `build.cmd` default likewise.
 - Release workflow now handles prerelease tags (`v1.0.0-rc1` etc.):

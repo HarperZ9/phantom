@@ -230,7 +230,7 @@ above and mark this checklist:
       `origin_mark`
 - [ ] `phantom apply … --layers 2` changes `MachineGuid` to the
       profile value
-- [ ] `phantom validate` reports consistent
+- [ ] `phantom validate runbook-demo` reports consistent
 - [ ] `phantom revert` restores `MachineGuid` byte-for-byte
 - [ ] `phantom license activate` in TTY shows ToU + Privacy Notice
       and prompts

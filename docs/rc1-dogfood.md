@@ -47,7 +47,9 @@ unsigned, note it here and skip the signtool line. Every SmartScreen
 - [ ] Reg query `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` →
       `PhantomTray` points at the installed tray exe.
 - [ ] Log out, log back in. Tray icon visible.
-- [ ] `phantom --version` → `phantom 1.0.0-rc1`.
+- [ ] `phantom --version` → `phantom 1.0.0` (the `-rc1` suffix lives on
+      the git tag and artifact filenames, not in the binary's version
+      string; it reads `1.0.0` for both rc1 and the final tag).
 - [ ] `phantom self-check --json` → `master_key_generation: 2`
       (production seed, not DEV placeholder). This is a Sev-1 gate:
       if it reports 1, the build did not consume PHANTOM_MASTER_SEED.
@@ -81,7 +83,9 @@ Back on the VM:
 
 - [ ] `phantom license activate <key>` prompts for ToU + privacy
       notice.
-- [ ] Type `agree` at each prompt.
+- [ ] Type `y` at each prompt (the ToU prompt defaults to No, so an
+      empty line declines). For an unattended run, pass
+      `--accept-tou --acknowledge-privacy-notice` instead of answering.
 - [ ] `phantom license status` → tier Pro, correct serial, expiry
       matches what you issued.
 

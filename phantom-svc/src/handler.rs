@@ -12,35 +12,29 @@ impl PhantomHandler {
         let mut handler = PhantomHandler {
             state: ServiceState::new(),
         };
-        handler.restore_or_first_run();
+        handler.restore_configured_profile();
         handler
     }
 
-    fn restore_or_first_run(&mut self) {
+    /// Re-apply a profile the operator previously activated, so spoofing
+    /// survives a reboot. This ONLY restores an explicitly-configured
+    /// profile (`auto_apply` is set by `set_protected` after a real
+    /// `apply`); with no such config the service stays unprotected.
+    ///
+    /// It deliberately does NOT generate or apply a profile on its own.
+    /// An earlier version, on finding an empty profile store, minted a
+    /// random "default" profile and applied it — spoofing the machine's
+    /// identity at service start with no license check and no user
+    /// consent, and polluting the registry backup so uninstall could not
+    /// restore the true original. Identity changes must always originate
+    /// from an explicit, licensed, consented operator `apply`.
+    fn restore_configured_profile(&mut self) {
         if let Some(config) = ServiceConfig::load() {
             if config.auto_apply {
                 if let Some(ref name) = config.active_profile {
                     self.do_protect(name, &config.layers);
                 }
             }
-            return;
-        }
-
-        match profile::list_profiles() {
-            Ok(profiles) if profiles.is_empty() => {
-                let seed = format!(
-                    "phantom-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos()
-                );
-                let prof = profile::engine::generate_profile(&seed, "default");
-                if profile::save_profile(&prof).is_ok() {
-                    self.do_protect("default", &[1, 2]);
-                }
-            }
-            _ => {}
         }
     }
 
@@ -320,6 +314,38 @@ mod tests {
             }
             _ => panic!("expected Status"),
         }
+    }
+
+    /// Regression for rc1 dogfood Bug B: a fresh service must never spoof
+    /// the machine on its own. The old `restore_or_first_run`, on finding
+    /// an empty profile store, minted a random "default" profile and
+    /// applied it at startup with no license and no consent. Point the
+    /// store at an empty, unique dir so no stale config triggers a
+    /// restore, then confirm a new handler sits unprotected and created
+    /// no auto-generated "default" profile.
+    #[test]
+    fn fresh_handler_does_not_auto_apply() {
+        let dir =
+            std::env::temp_dir().join(format!("phantom-svc-noautoapply-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("PHANTOM_DATA_DIR", &dir);
+
+        let handler = PhantomHandler::new();
+        assert!(
+            !handler.state.protected,
+            "service must not self-protect at startup"
+        );
+        assert!(handler.state.active_profile.is_none());
+        assert!(handler.state.active_layers.is_empty());
+
+        let default_profile = profile::profiles_dir().join("default.json");
+        assert!(
+            !default_profile.exists(),
+            "service must not auto-generate a 'default' profile"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::remove_var("PHANTOM_DATA_DIR");
     }
 
     #[test]

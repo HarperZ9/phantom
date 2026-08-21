@@ -31,7 +31,7 @@ phantom profile generate my-profile
 
 This creates a new, random identity — a fresh MachineGuid, a
 plausible OEM brand string, believable NIC vendor prefixes, etc. —
-and saves it under `%APPDATA%\Phantom\profiles\my-profile.json`.
+and saves it under `%ProgramData%\Phantom\profiles\my-profile.json`.
 
 `generate` does **not** apply the profile yet. You can list what
 you have, inspect it, or generate several and pick the one you
@@ -59,10 +59,10 @@ The command runs synchronously and reports what changed:
 ```
 Applied 'my-profile' at layer 2 (registry).
   HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid ← <new-guid>
-  HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Hostname ← ...
-  [12 more]
+  HKLM\SOFTWARE\Microsoft\SQMClient\MachineId ← <new-id>
+  [3 more]
 
-Backup written to %APPDATA%\Phantom\backup\pre-my-profile.reg
+Backup written to %ProgramData%\Phantom\backup.json
 Reboot recommended for changes to fully propagate.
 ```
 

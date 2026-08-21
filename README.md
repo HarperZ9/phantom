@@ -141,7 +141,7 @@ Phantom profiles model identifier vectors across several hardware categories. In
 | GPU | PCI vendor/device ID, PnP instance ID, driver key GUID | 1 | Deferred |
 | TPM | Module serial, manufacturer ID | 1 | Deferred |
 | Display | EDID serial, manufacturer code, product code | 1 | Deferred |
-| Windows | MachineGuid, HwProfileGuid, MachineId, ProductId, InstallDate, ComputerName | 2 | Prerelease lab scope |
+| Windows | MachineGuid, HwProfileGuid, MachineId, ProductId, InstallDate | 2 | Prerelease lab scope (ComputerName deferred — needs a full rename) |
 | Boot | BCD identifier GUID, boot disk signature | 2 | Prerelease lab scope; verify per runbook |
 
 Generated identifiers are vendor-accurate. Samsung disk serials match Samsung's format. Intel MACs use real Intel OUI prefixes. A single seed produces a deterministic, internally consistent identity across every vector.
@@ -199,7 +199,7 @@ Phantom resolves configuration in this order (highest wins):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PHANTOM_DATA_DIR` | `%APPDATA%\phantom` | Base directory for profiles, logs, config, and license state |
+| `PHANTOM_DATA_DIR` | `%ProgramData%\Phantom` | Base directory for profiles, logs, config, and license state (machine-wide, shared by the CLI and the service) |
 | `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named pipe endpoint for service IPC |
 | `PHANTOM_LOG_LEVEL` | `info` | Log verbosity: `trace`, `debug`, `info`, `warn`, `error` |
 | `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate config file location |

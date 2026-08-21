@@ -287,13 +287,18 @@ impl LicenseGuard {
 }
 
 fn license_file_path() -> PathBuf {
+    // Must resolve to the same machine-wide store as phantom-cli's
+    // data_dir(). phantom-license is a lower crate than phantom-cli, so
+    // the base logic is duplicated here rather than imported; keep the two
+    // in sync. On Windows this is %ProgramData%\Phantom (identical for the
+    // user and LocalSystem); per-user %APPDATA% split the store.
     let base = if let Ok(dir) = std::env::var("PHANTOM_DATA_DIR") {
         PathBuf::from(dir)
     } else if cfg!(windows) {
-        std::env::var("APPDATA")
+        std::env::var("ProgramData")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("phantom")
+            .unwrap_or_else(|_| PathBuf::from(r"C:\ProgramData"))
+            .join("Phantom")
     } else {
         std::env::var("HOME")
             .map(|h| PathBuf::from(h).join(".config"))

@@ -96,13 +96,18 @@ phantom license fingerprint
 
 ### Silent Deployment Checklist
 
-1. Set `PHANTOM_DATA_DIR` via GPO/MDM
+1. Set `PHANTOM_DATA_DIR` via GPO/MDM (optional — defaults to the
+   machine-wide `%ProgramData%\Phantom`)
 2. Deploy MSI with `/qn` (silent)
 3. Distribute license keys to each machine (pre-activated via `phantom license activate`)
-4. Optionally pre-stage a profile JSON in `<PHANTOM_DATA_DIR>/profiles/default.json`
-5. Start the service: `sc start PhantomService`
+4. Pre-stage a profile JSON in `<PHANTOM_DATA_DIR>/profiles/<name>.json`
+5. Apply it explicitly from an elevated context:
+   `phantom apply <name> --layers 2`
 
-The service auto-applies the `default` profile on first run if no prior config exists.
+The service never spoofs on its own. It applies only what an operator
+explicitly applies, and once applied it re-applies that profile across
+reboots. A fresh install with no prior apply leaves the machine
+unprotected.
 
 ## Uninstall
 

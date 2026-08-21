@@ -6,6 +6,38 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed — rc1 dogfood blockers
+- **Uninstall now restores the original hardware identity (Sev-1).** The
+  registry backup and profile store moved from per-user `%APPDATA%` to
+  the machine-wide `%ProgramData%\Phantom`. The elevated-user CLI and the
+  LocalSystem service now share one store, so the pre-uninstall cleanup
+  (which runs as LocalSystem) can read the backup the CLI wrote and revert
+  `MachineGuid` et al. to their true originals. Previously the two
+  resolved `%APPDATA%` to different directories, the cleanup never found
+  the backup, and uninstall left the machine with a changed identity.
+  `backup_path()` now derives from `data_dir()` and honors
+  `PHANTOM_DATA_DIR`. The installer pre-creates the store with a Users
+  ACL so non-elevated `generate` / `license activate` still write.
+- **The service no longer spoofs on its own (Sev-1).** Removed the
+  first-run path that minted a random `default` profile and applied it at
+  service start with no license check and no consent. The service now
+  only re-applies a profile an operator explicitly applied (persistence
+  across reboot); a fresh install stays unprotected until an explicit,
+  licensed `apply`.
+- **ComputerName is no longer spoofed at Layer 2 (Sev-2).** Writing only
+  the two ComputerName registry values desynced the machine name and
+  broke `shutdown`, `Restart-Computer`, and WMI. Spoofing it safely needs
+  a full rename across Netbt/Tcpip/Hostname plus a reboot, which is out of
+  Layer-2 scope; it is deferred.
+- `phantom apply` prints a clear "run elevated" message when it hits
+  access-denied, instead of a wall of `os error 5` lines.
+- `phantom revert` deletes the registry backup once every value is
+  restored, so `phantom status` reports the original state (not
+  "profile applied") and a later apply starts from a clean baseline.
+- Docs corrected to match: data location (`%ProgramData%\Phantom`),
+  the Layer-2 identifier set (no ComputerName), the no-auto-apply service
+  behavior, and the activation prompt (`y`, not `agree`).
+
 ## [1.0.0-rc1] — prerelease
 
 **Phantom's first customer-facing prerelease.** A Windows MSI installer,

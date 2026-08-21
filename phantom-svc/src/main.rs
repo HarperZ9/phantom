@@ -82,7 +82,13 @@ fn run_cleanup() {
     remove_tray_autostart();
     println!("done.");
 
-    print!("  Clearing saved config... ");
+    // Clear the service's auto-apply state so a reinstall does not
+    // re-protect on its own. The registry backup is consumed by the
+    // revert above (revert_all deletes it on success). Profiles, license,
+    // and CLI config are intentionally LEFT in place so a reinstall picks
+    // the operator's setup back up (see docs/user/uninstall.md); a full
+    // wipe is a documented manual step.
+    print!("  Clearing service state... ");
     let config_path = phantom_cli::profile::profiles_dir().join(".config.json");
     let _ = std::fs::remove_file(config_path);
     println!("done.");

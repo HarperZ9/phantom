@@ -238,11 +238,15 @@ pub fn resolved() -> Resolved {
 }
 
 fn default_data_dir() -> PathBuf {
+    // Keep this in lockstep with profile::data_dir(): a machine-wide
+    // %ProgramData%\Phantom store shared by the elevated-user CLI and the
+    // LocalSystem service. Per-user %APPDATA% split the store and broke
+    // uninstall revert.
     if cfg!(windows) {
-        std::env::var("APPDATA")
+        std::env::var("ProgramData")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("phantom")
+            .unwrap_or_else(|_| PathBuf::from(r"C:\ProgramData"))
+            .join("Phantom")
     } else {
         std::env::var("HOME")
             .map(|h| PathBuf::from(h).join(".config"))

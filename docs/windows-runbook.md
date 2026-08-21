@@ -119,8 +119,10 @@ tier `Free`, this machine's fingerprint hex, and a MAC.
 .\target\release\phantom-cli.exe apply runbook-demo --layers 2
 ```
 
-Expected: prints per-value results for MachineGuid, MachineId,
-ComputerName, ActiveComputerName, ProductId. No `FAILED`.
+Expected: prints per-value results for MachineGuid, HwProfileGuid,
+MachineId, ProductId, and InstallDate. No `FAILED`. ComputerName is
+deliberately not spoofed at Layer 2 (a half-rename breaks reboot and
+WMI); it is deferred to a full rename implementation.
 
 **Verify the registry actually changed:**
 

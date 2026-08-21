@@ -48,6 +48,7 @@
       <ComponentRef Id="PhantomTray" />
       <ComponentRef Id="TrayAutostart" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="PhantomDataStore" />
     </Feature>
 
     <!-- ================================================================ -->
@@ -60,6 +61,16 @@
       </Directory>
       <Directory Id="ProgramMenuFolder">
         <Directory Id="PhantomMenuFolder" Name="Phantom" />
+      </Directory>
+      <!--
+        Machine-wide state store: %ProgramData%\Phantom. Shared by the
+        elevated-user CLI (which writes the registry backup on apply) and
+        the LocalSystem service (which reads it on pre-uninstall cleanup
+        to revert). It is granted to Users so non-elevated commands like
+        `phantom generate` and `phantom license activate` can write here.
+      -->
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="PhantomDataFolder" Name="Phantom" />
       </Directory>
     </Directory>
 
@@ -130,6 +141,34 @@
     <!-- ================================================================ -->
     <!-- Components: Start Menu shortcut                                  -->
     <!-- ================================================================ -->
+
+    <!-- ================================================================ -->
+    <!-- Component: machine-wide data store with a Users-writable ACL     -->
+    <!-- ================================================================ -->
+
+    <!-- WIX_ACCOUNT_USERS resolves the built-in Users group by its
+         well-known SID at install time, so the ACL below is correct on
+         localized Windows (where the group is not named "Users"). -->
+    <PropertyRef Id="WIX_ACCOUNT_USERS" />
+
+    <DirectoryRef Id="PhantomDataFolder">
+      <Component Id="PhantomDataStore" Guid="*" Win64="yes">
+        <CreateFolder>
+          <!-- Append (not replace) an ACE so SYSTEM/Administrators access
+               inherited from %ProgramData% is preserved. Grants Users the
+               ability to create/read/write files here, so non-elevated
+               commands (phantom generate, phantom license activate) work. -->
+          <util:PermissionEx User="[WIX_ACCOUNT_USERS]" GenericAll="yes" />
+        </CreateFolder>
+        <RemoveFolder Id="RemovePhantomDataFolder" On="uninstall" />
+        <RegistryValue Root="HKLM"
+                       Key="SOFTWARE\Phantom"
+                       Name="DataStore"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
 
     <DirectoryRef Id="PhantomMenuFolder">
       <Component Id="StartMenuShortcut" Guid="*" Win64="yes">

@@ -17,7 +17,6 @@
   -->
 
   <?define ProductVersion = "1.0.0" ?>
-  <?define BuildDir = "..\target\release" ?>
 
   <Product Id="*"
            Name="Phantom"

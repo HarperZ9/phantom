@@ -63,6 +63,7 @@ REM  build for tag v0.7.0 embeds 0.7.0 as the MSI ProductVersion,
 REM  without having to edit the .wxs on every version bump.
 candle.exe -nologo -ext WixUtilExtension -ext WixUIExtension -arch x64 ^
     -dProductVersion=%PHANTOM_MSI_VERSION% ^
+    -dBuildDir="%BUILD_DIR%" ^
     -out "%OBJ%" "%WXS%"
 if errorlevel 1 (
     echo ERROR: candle.exe failed.

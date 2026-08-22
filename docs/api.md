@@ -23,7 +23,7 @@ Called by every phantom install once per 24 hours (configurable).
 }
 ```
 
-Field semantics — see `phantom-license/src/phone_home.rs` and the
+Field semantics: see `phantom-license/src/phone_home.rs` and the
 in-app `phantom privacy-notice` for the authoritative source.
 
 - `schema`: bumped when the payload format changes.

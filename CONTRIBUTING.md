@@ -13,7 +13,7 @@ technical standards contributors are held to.
 - **No behavior change disguised as a refactor.** Refactors that alter
   semantics are two commits (or two PRs), never one.
 - **Frozen invariants get pinned assertions.** The license signing key,
-  the IPC magic bytes, the SMBIOS layout offsets — anything that a
+  the IPC magic bytes, the SMBIOS layout offsets, anything that a
   future refactor would silently break gets a test that reads like a
   contract, not like an implementation check.
 
@@ -56,7 +56,7 @@ real finding gets triaged in the PR.
 
 ## Tests that touch process-global state
 
-Env vars, the license file on disk, the config file — any test that
+Env vars, the license file on disk, the config file, any test that
 mutates something the whole process shares must acquire the shared
 mutex from `phantom_cli::profile::env_test_mutex()` before touching it
 and remove/restore what it changed at the end. Parallel test threads
@@ -69,7 +69,7 @@ otherwise race on the process env table.
    by emitting an `Envelope` with a typed payload declared in
    `json_out.rs`.
 3. Add tests for the pure logic in the module where it lives. The
-   `main.rs` handler is a thin shell — the tests belong in the module.
+   `main.rs` handler is a thin shell, the tests belong in the module.
 4. Update the README's usage section and the CHANGELOG's
    `[Unreleased]` block in the same commit.
 
@@ -95,11 +95,12 @@ titles, or code comments.
 - New user-facing behavior is documented in the README
 - The CHANGELOG is updated in the same commit that introduces the
   change
-- The diff answers "what did I trust the reviewer to catch" — bugs
+- The diff answers "what did I trust the reviewer to catch", bugs
   they would have to run the code to find go into the PR description
   as risks, not as surprises
 
 ## Reporting a vulnerability
 
-Do not open a public issue. Email `security@phantom.dev` with a
-description, reproduction steps, and any suggested mitigation.
+Do not open a public issue. Report it privately through GitHub: the
+repository's **Security** tab, **Report a vulnerability**. See
+[SECURITY.md](SECURITY.md).

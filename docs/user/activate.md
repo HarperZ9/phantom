@@ -1,90 +1,75 @@
 # Activating your license
 
-Phantom starts in Free tier — enough to audit your current hardware
-identity but not enough to change it. To unlock Pro or Enterprise
-you need a license key, delivered to you at purchase.
+Phantom starts in Free tier, which already applies the Layer-2 registry
+identity set and keeps two profiles. A Pro or Enterprise key raises the
+profile limit, enables the background service, and unlocks the deferred
+layers as they ship. See [licensing.md](licensing.md) for the tiers.
 
 ## Prerequisites
 
 - Phantom installed (see [install.md](install.md)).
-- A license key, formatted `AAAAA-BBBBB-CCCCC-...` (12 groups of 5
-  characters, dash-separated).
-- Administrator terminal on the machine you bought the key for.
+- A license key: a long, dash-separated string like
+  `AEA6Y-UAAAD-HFAAA-...-QOZ7R-K`.
+- An Administrator terminal on the machine the key was issued for.
 
 ## What "bound to a machine" means
 
 Every key is bound to one machine at issue time. Your machine
-fingerprint — a 16-byte hash of stable hardware identifiers — was
-part of what you sent us during purchase (via `phantom license
-request`). The key we sent back only validates on that same
-fingerprint. Moving the key to a different machine will not work;
-you have to ask for a re-issue.
+fingerprint, a hash of stable hardware identifiers, was part of what you
+sent during purchase (via `phantom license request`). The key only
+validates on that same fingerprint. Moving the key to a different
+machine will not work; ask your contact for a re-issue.
 
 If your motherboard, primary NIC, or CPU change after issue, the
-fingerprint may drift and the key will stop validating. Email
-support with your license serial (`phantom license status`) and we
-will re-issue against the new fingerprint at no cost.
+fingerprint may drift and the key stops validating. Send your license
+serial (`phantom license status`) to your contact and they will re-issue
+against the new fingerprint.
 
-## 1. Request activation
+## 1. Activate the key
 
 ```
-phantom license activate AAAAA-BBBBB-CCCCC-DDDDD-EEEEE-FFFFF-GGGGG-HHHHH-IIIII-JJJJJ-KKKKK-LLLLL
+phantom license activate AEA6Y-UAAAD-HFAAA-...-QOZ7R-K
 ```
 
-Phantom will show you the two documents you must agree to before it
-does anything:
+Phantom shows the two documents you agree to before it does anything:
 
-- **Terms of Use** — what you promise not to do with the tool.
-- **Privacy notice** — what phones home, when, and why.
+- **Terms of Use**: what you promise not to do with the tool.
+- **Privacy Notice**: what phones home, when, and why.
 
-Type `agree` at each prompt. If you decline either, activation
-aborts and Phantom stays in Free tier.
+Answer `y` at each prompt. The Terms prompt defaults to No, so an empty
+answer declines and activation aborts. For unattended installs, pass
+`--accept-tou --acknowledge-privacy-notice` instead of answering.
 
-## 2. Check activation succeeded
+## 2. Confirm it worked
 
 ```
 phantom license status
 ```
 
-Expected output:
+Expected:
 
 ```
 Tier             : Pro
 License serial   : 265a67cc
-Activated at     : 2026-04-17 21:15:03 UTC
 Expires          : 2027-04-17 (365 days remaining)
-Last phone-home  : (never — first check within 24h)
 ```
 
-If you see `Tier : Free` after activation, `phantom license status`
-will explain why: proof failure, fingerprint mismatch, or expired
-key. Contact support with the reason.
+If you see `Tier : Free` after activating, `phantom license status`
+explains why: proof failure, fingerprint mismatch, or expired key.
 
 ## Rate limits
 
 Phantom rate-limits activation attempts: five per hour, with
-exponential back-off after failures (30 seconds, then doubling to 1
-hour). This is an anti-brute-force measure, not a purchasing limit.
-If you fat-fingered a key and hit the limit, wait; if you actually
-lost your key, contact support.
+exponential back-off after failures (30 seconds, doubling up to an
+hour). This is anti-brute-force, not a purchasing limit. If you mistyped
+a key and hit the limit, wait; if you lost your key, contact your
+licensing contact.
 
-## Turning phone-home off
+## Phone-home is off until you enable it
 
-Phone-home is on by default (see the privacy notice you accepted
-above). To turn it off:
-
-```
-phantom config set phone_home_enabled false
-```
-
-Your license keeps working locally until it expires. We can no
-longer revoke it remotely — this is a tradeoff you may prefer.
-
-## Turning it back on
-
-```
-phantom config set phone_home_enabled true
-```
+Activation records that you acknowledged the Privacy Notice, but no
+license check leaves the machine until you set a callback URL. See
+[privacy.md](privacy.md) to enable, configure, or keep it off.
 
 ## Next steps
 

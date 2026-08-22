@@ -8,8 +8,11 @@ next tagged release ships.
 
 ## Reporting a vulnerability
 
-Do **not** file a public GitHub issue for a security report. Send the
-details to `security@phantom.dev` and include, when possible:
+Do **not** file a public GitHub issue for a security report. Report it
+privately through GitHub: open the repository's **Security** tab and
+click **Report a vulnerability**
+([direct link](https://github.com/HarperZ9/phantom/security/advisories/new)).
+Include, when possible:
 
 - The Phantom version and platform where the issue was observed
 - A reproducible test case or a description precise enough to build one
@@ -24,12 +27,12 @@ fix + disclosure within 10 business days.
 
 - The license activation and validation path (`phantom-license` crate)
 - The named-pipe protocol between the CLI, service, and tray
-  (`phantom-ipc` crate) — including message parsing and pipe ACLs
-- The Windows service surface (`phantom-svc` crate) — including how it
+  (`phantom-ipc` crate), including message parsing and pipe ACLs
+- The Windows service surface (`phantom-svc` crate), including how it
   reads the config file and how it persists state
-- The kernel filter driver (`phantom-driver`) — anything that could
+- The kernel filter driver (`phantom-driver`), anything that could
   crash a client machine or grant kernel-level primitives to userland
-- The UEFI DXE module (`phantom-dxe`) — SMBIOS table rewrites and EFI
+- The UEFI DXE module (`phantom-dxe`), SMBIOS table rewrites and EFI
   variable handling
 
 ## What is out of scope

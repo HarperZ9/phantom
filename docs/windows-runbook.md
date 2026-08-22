@@ -5,7 +5,7 @@ The exit gate on Sprint 22 is that a second engineer can execute
 this runbook end-to-end without asking follow-up questions and end
 with a green summary at the bottom.
 
-## Prereqs — one-time per Windows image
+## Prereqs, one-time per Windows image
 
 Pick one of the two VM environments. Both work; the choice is
 whatever the engineer already has.
@@ -17,7 +17,7 @@ whatever the engineer already has.
    Phase 1.
 3. Create a Gen 2 VM, 4 vCPU / 8 GB RAM / 60 GB disk, one virtual
    NIC on the external switch.
-4. Install Windows. Skip the Microsoft account prompt — use a local
+4. Install Windows. Skip the Microsoft account prompt, use a local
    account named `phantom-dev`.
 5. Enable Remote Desktop.
 6. **Take a snapshot named `clean`.**
@@ -28,7 +28,7 @@ whatever the engineer already has.
 2. Enable RDP inbound on port 3389.
 3. Snapshot the OS disk before proceeding.
 
-## Prereqs — dev tools inside the VM
+## Prereqs, dev tools inside the VM
 
 Once inside the VM:
 
@@ -41,7 +41,7 @@ $env:PATH += ";$env:USERPROFILE\.cargo\bin"
 # Install git
 winget install --id Git.Git --silent --accept-package-agreements
 
-# (Optional) VS Build Tools for MSVC — Rust may prompt for this on
+# (Optional) VS Build Tools for MSVC, Rust may prompt for this on
 # first `cargo build`. If prompted, install the C++ workload only.
 ```
 
@@ -64,10 +64,10 @@ Expected: no errors. Warnings on the `phantom-driver` C code are
 fine; the Rust workspace should complete clean.
 
 The signed release archives from GitHub already contain built
-binaries — building from source is for engineers, not for
+binaries, building from source is for engineers, not for
 customer QA.
 
-## Smoke test — Layer 2 registry spoofing
+## Smoke test, Layer 2 registry spoofing
 
 The one behavior that matters for v1: `phantom apply … --layers 2`
 changes real registry values and `phantom revert` restores them.
@@ -130,7 +130,7 @@ WMI); it is deferred to a full rename implementation.
 (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Cryptography').MachineGuid
 ```
 
-Expected: matches `os.machine_guid` from the profile JSON — NOT
+Expected: matches `os.machine_guid` from the profile JSON, NOT
 the value from `pre-phantom-snapshot.json`.
 
 **Validate cross-source consistency:**
@@ -159,7 +159,7 @@ Expected: prints restored values.
 
 Expected: matches `pre-phantom-snapshot.json['HKLM:\SOFTWARE\Microsoft\Cryptography\MachineGuid']`.
 
-## Smoke test — license + phone-home + tripwire
+## Smoke test, license + phone-home + tripwire
 
 **License activation flow (interactive):**
 
@@ -171,7 +171,7 @@ Expected: matches `pre-phantom-snapshot.json['HKLM:\SOFTWARE\Microsoft\Cryptogra
 Expected: displays the ToU, prompts `[y/N]`; displays the Privacy
 Notice, prompts `[Y/n]`. Then produces "License activated: Free
 tier" or an InvalidSignature error (since we used a fake key).
-Either is fine — what matters is the disclosures printed.
+Either is fine, what matters is the disclosures printed.
 
 **License request enrollment block:**
 
@@ -190,14 +190,14 @@ licensing team to receive a real key.
 ```
 
 Expected: prints "Activation failed: license key signature
-verification failed" — the SAME error a random invalid key would
+verification failed", the SAME error a random invalid key would
 produce. Then:
 
 ```powershell
 .\target\release\phantom-cli.exe tamper-report
 ```
 
-Expected: shows `TRIPPED — install silently downgraded to Free
+Expected: shows `TRIPPED, install silently downgraded to Free
 tier` and `HIGH honey_key_attempt`. This confirms the trap fires
 silently to the user but is visible to the operator running the
 tamper report.

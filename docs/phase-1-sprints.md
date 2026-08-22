@@ -1,4 +1,4 @@
-# Phase 1 — Launch Readiness Sprints
+# Phase 1, Launch Readiness Sprints
 
 Six sprints to move Phantom from "codebase that compiles" to "product
 that can be sold." Two are external-blocked (procurement); the rest
@@ -23,13 +23,13 @@ Sprint 23 ─┤─────── Sprint 26 ──────────�
 
 Sprint 22 (Windows validation) and Sprint 23 (cert procurement) can
 start **Day 1 in parallel**. Sprint 24 (master seed) can also start
-Day 1 — it's a config change, not blocked on anything. Sprint 25
+Day 1, it's a config change, not blocked on anything. Sprint 25
 (endpoints) can start once 24 lands. Sprint 26 (MSI) needs 22 done
 and 23 delivered. Sprint 27 is the integration rehearsal.
 
 ---
 
-## Sprint 22 — Windows CI green + Layer-2 end-to-end on real hardware
+## Sprint 22, Windows CI green + Layer-2 end-to-end on real hardware
 
 **Duration**: 1 week (or 2 if physical Windows setup is greenfield).
 
@@ -81,7 +81,7 @@ been executed end-to-end on a real Windows machine.
 
 ---
 
-## Sprint 23 — Release signing infrastructure (procurement + wiring)
+## Sprint 23, Release signing infrastructure (procurement + wiring)
 
 **Duration**: 2–4 weeks wall-clock; ~1 week engineering.
 
@@ -96,9 +96,9 @@ SmartScreen reputation.
 - File corporate paperwork (D-U-N-S, articles of incorporation if
   not already). This is the long-pole item.
 - Choose signing approach:
-  - **In-cloud HSM signing** (Sectigo cloud, DigiCert KeyLocker) —
+  - **In-cloud HSM signing** (Sectigo cloud, DigiCert KeyLocker),
     signs from CI without shipping the key. Preferred.
-  - **Hardware token** — cert on a USB dongle, requires a self-
+  - **Hardware token**, cert on a USB dongle, requires a self-
     hosted runner or a signing shim on a physical box. Cheaper but
     operationally heavier.
 - Add signing step to `.github/workflows/release.yml` on Windows
@@ -133,12 +133,12 @@ SmartScreen reputation.
 - EV vetting can take 2–4 weeks. Start Day 1 of Phase 1.
 - Corporate entity not yet formed → cannot receive cert. Legal setup
   is a hidden dependency.
-- Kernel driver signing (WHQL) is a separate, much longer process —
+- Kernel driver signing (WHQL) is a separate, much longer process,
   explicitly excluded from Phase 1 per Layer-1 deferral.
 
 ---
 
-## Sprint 24 — Master seed rotation, CI-driven
+## Sprint 24, Master seed rotation, CI-driven
 
 **Duration**: 3–5 days.
 
@@ -159,7 +159,7 @@ never appears in the repo. The current placeholder seed in
   - If unset AND `--debug` → fall back to the current placeholder
     with a compiler warning ("dev build, do not distribute").
 - Bump `MASTER_KEY_GEN` in the generated file from 1 to 2.
-- Update `phantom-license/src/key.rs` — the `derived_signing_key_is_
+- Update `phantom-license/src/key.rs`, the `derived_signing_key_is_
   pinned` test currently pins the SHA-256 of the derived subkey for
   the placeholder seed; move that pin to a `#[cfg(not(release))]`
   test, add a separate release-build pin that's set once the real
@@ -169,7 +169,7 @@ never appears in the repo. The current placeholder seed in
 - Runbook: how to rotate the seed. What breaks (every existing
   license becomes invalid) and what doesn't (customer profiles keep
   loading with `Unmarked` verdict). Document that this is a **one-
-  time-only, pre-launch rotation** — once real customers hold keys,
+  time-only, pre-launch rotation**, once real customers hold keys,
   further rotation is a breaking change.
 
 ### Deliverables
@@ -201,13 +201,13 @@ never appears in the repo. The current placeholder seed in
 
 ---
 
-## Sprint 25 — License issuance + phone-home endpoints
+## Sprint 25, License issuance + phone-home endpoints
 
 **Duration**: 2 weeks.
 
 **Goal**: Two minimal HTTP endpoints on Cloudflare Workers (or
 equivalent) that close the licensing loop end-to-end. Not a full
-customer portal — the smallest thing that makes the tool sellable.
+customer portal, the smallest thing that makes the tool sellable.
 
 ### Scope
 
@@ -259,7 +259,7 @@ The endpoint `phantom` phone-home calls into.
   last_seen_at NULLABLE)`
 - Admin CLI in a new `phantom-vendor-tools` (private repo)
 - Deployment via `wrangler deploy` or equivalent; production URL
-  in a Cloudflare-owned custom domain (e.g. `api.phantom.dev`)
+  on a Cloudflare Worker (custom domain optional)
 - `docs/api.md` documenting the request/response schemas
 - `docs/issuance-workflow.md` for the internal team
 
@@ -284,7 +284,7 @@ The endpoint `phantom` phone-home calls into.
 
 ---
 
-## Sprint 26 — Windows MSI installer + install/uninstall validation
+## Sprint 26, Windows MSI installer + install/uninstall validation
 
 **Duration**: 2 weeks.
 
@@ -349,7 +349,7 @@ without leaving orphans.
 
 ---
 
-## Sprint 27 — v1.0.0-rc1 → v1.0.0 GA rehearsal
+## Sprint 27, v1.0.0-rc1 → v1.0.0 GA rehearsal
 
 **Duration**: 1 week.
 
@@ -409,14 +409,14 @@ against production endpoints, fix what breaks, ship GA.
 To keep scope real:
 
 - **Layer 1 kernel driver.** WHQL attestation is 6–12 weeks with
-  Microsoft. Ship v1 as Layer 2 only. Advertise Layer 1 as "v2 —
+  Microsoft. Ship v1 as Layer 2 only. Advertise Layer 1 as "v2,
   in submission with Microsoft."
 - **Layer 0 UEFI/DXE.** Niche (requires Secure Boot off), untested
   on physical hardware. Defer to v2/v3.
 - **Ed25519 migration for origin marks.** Would let `phantom-verify`
   ship publicly. Nice-to-have; Phase 2.
 - **Public marketing site.** That's the deliverable Phase 1 exists
-  to *justify* — build it after v1.0.0 GA.
+  to *justify*, build it after v1.0.0 GA.
 - **Payment integration.** For v1.0.0, licenses can be issued by
   emailing an invoice and having the admin CLI issue on paid receipt.
   Automate via Stripe in Phase 2.
@@ -429,12 +429,12 @@ To keep scope real:
 
 | Sprint | Wall-clock | Engineer-days | External |
 |---|---|---|---|
-| 22 | 1–2 wk | 5–10 | — |
+| 22 | 1–2 wk | 5–10 |, |
 | 23 | 2–4 wk | 3–5 | Cert vendor (2–4 wk lead) |
-| 24 | 3–5 d | 3–5 | — |
+| 24 | 3–5 d | 3–5 |, |
 | 25 | 2 wk | 8–12 | Cloudflare / DNS setup |
-| 26 | 2 wk | 8–12 | — |
-| 27 | 1 wk | 3–5 | — |
+| 26 | 2 wk | 8–12 |, |
+| 27 | 1 wk | 3–5 |, |
 | **Total** | **6–10 wk** | **30–50** | Cert + legal review |
 
 Assumes 22, 23, 24 run in parallel from Day 1; 25 starts after 24;
@@ -442,8 +442,8 @@ Assumes 22, 23, 24 run in parallel from Day 1; 25 starts after 24;
 
 ## What "shipped" looks like at Phase 1 exit
 
-A downloadable, signed Windows MSI at `https://phantom.dev/download`,
+A downloadable Windows MSI from the GitHub releases page,
 paired with a functioning license issuance workflow, that installs a
 tool a paying customer can activate and use to spoof Layer-2
-hardware identity on their own machine. Not a marketing site yet —
+hardware identity on their own machine. Not a marketing site yet,
 that's Phase 2. Just: the product exists, works, and can take money.

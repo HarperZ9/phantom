@@ -5,7 +5,7 @@ engineer against a fresh Windows VM, using the same downloads a
 paying customer would use. Every step is copyable; every checkbox
 must pass green before the tag flips from `v1.0.0-rc1` to `v1.0.0`.
 
-Not a code checklist — this exercises release artifacts that were
+Not a code checklist, this exercises release artifacts that were
 already built by CI, endpoints already deployed, license issued
 against the production seed. If anything below requires code
 changes, file a follow-up and bump to `-rc2`.
@@ -23,7 +23,7 @@ changes, file a follow-up and bump to `-rc2`.
   logs).
 - The GitHub release page for `v1.0.0-rc1` open in a browser.
 
-## Section 1 — Download and verify
+## Section 1, Download and verify
 
 - [ ] Open the [v1.0.0-rc1 release page](https://github.com/HarperZ9/phantom/releases/tag/v1.0.0-rc1).
 - [ ] Download `PhantomSetup-v1.0.0-rc1.msi` and `SHA256SUMS.txt`.
@@ -36,7 +36,7 @@ If Sprint 23 (cert) has not yet delivered and the artifact is
 unsigned, note it here and skip the signtool line. Every SmartScreen
 "Windows protected your PC" warning in the sections below is expected.
 
-## Section 2 — Install (fresh)
+## Section 2, Install (fresh)
 
 - [ ] Double-click MSI. UAC accepted.
 - [ ] SmartScreen: publisher line reads Phantom vendor. Run anyway.
@@ -54,14 +54,14 @@ unsigned, note it here and skip the signtool line. Every SmartScreen
       (production seed, not DEV placeholder). This is a Sev-1 gate:
       if it reports 1, the build did not consume PHANTOM_MASTER_SEED.
 
-## Section 3 — Request a license
+## Section 3, Request a license
 
 - [ ] `phantom license request` prints an enrollment JSON blob.
 - [ ] Copy the blob out of the VM (paste into an email to yourself,
       or through the VM host clipboard).
 - [ ] Note: `fingerprint_hex` and `master_key_generation: 2`.
 
-## Section 4 — Issue the license (vendor seat)
+## Section 4, Issue the license (vendor seat)
 
 On the vendor workstation, not on the VM:
 
@@ -77,7 +77,7 @@ On the vendor workstation, not on the VM:
       "SELECT * FROM licenses WHERE serial = '<serial>';"`.
 - [ ] Send the key to yourself (same channel as step 3, reversed).
 
-## Section 5 — Activate
+## Section 5, Activate
 
 Back on the VM:
 
@@ -89,32 +89,32 @@ Back on the VM:
 - [ ] `phantom license status` → tier Pro, correct serial, expiry
       matches what you issued.
 
-## Section 6 — Generate + apply a profile
+## Section 6, Generate + apply a profile
 
-- [ ] `phantom audit` — capture the current MachineGuid in a note.
+- [ ] `phantom audit`, capture the current MachineGuid in a note.
       This is the baseline.
 - [ ] `phantom profile generate dogfood-rc1`.
-- [ ] `phantom apply dogfood-rc1 --layers 2` — completes, prints the
+- [ ] `phantom apply dogfood-rc1 --layers 2`, completes, prints the
       list of registry paths it wrote.
-- [ ] `phantom validate` — all keys green.
+- [ ] `phantom validate`, all keys green.
 - [ ] `reg query "HKLM\SOFTWARE\Microsoft\Cryptography" /v MachineGuid`
       shows the spoofed value, not the baseline.
 
-## Section 7 — Reboot persistence
+## Section 7, Reboot persistence
 
 - [ ] Reboot the VM.
 - [ ] After login: `sc query PhantomService` → RUNNING.
 - [ ] `phantom status` → dogfood-rc1 still active.
 - [ ] MachineGuid still the spoofed value, not the baseline.
 
-## Section 8 — Revert
+## Section 8, Revert
 
 - [ ] `phantom revert`.
 - [ ] `reg query "HKLM\SOFTWARE\Microsoft\Cryptography" /v MachineGuid`
       → baseline value from Section 6.
 - [ ] `phantom status` → Unprotected.
 
-## Section 9 — Phone-home
+## Section 9, Phone-home
 
 Phone-home is operator-configured and opt-in. First point the install
 at the endpoint, then trigger a call. There is no `--force-phone-home`
@@ -128,18 +128,18 @@ flag; the call fires on any `phantom` invocation once it is due.
       lingers briefly at the end while the call completes.
 - [ ] On the vendor seat: `wrangler d1 execute phantom-licenses
       --command "SELECT serial, last_seen_at FROM licenses WHERE
-      serial = '<serial>';"` — `last_seen_at` is now populated.
+      serial = '<serial>';"`, `last_seen_at` is now populated.
 - [ ] `wrangler tail` shows `POST /license/callback 200` with no
       `proof_invalid` or `unknown_serial` in the log.
 
-## Section 10 — Phone-home opt-out
+## Section 10, Phone-home opt-out
 
 - [ ] `phantom config set phone_home_enabled false`.
 - [ ] Make a call due again (as in Section 9) and run a command. No
-      new `last_seen_at` update in D1 — the tool respected the setting.
+      new `last_seen_at` update in D1, the tool respected the setting.
 - [ ] `phantom config set phone_home_enabled true` restores default.
 
-## Section 11 — Revocation
+## Section 11, Revocation
 
 On the vendor seat:
 
@@ -155,14 +155,14 @@ Back on the VM:
       High-severity tripwire.
 - [ ] The NEXT `phantom` invocation reports Tier: Free (the downgrade
       applies on the load after the revocation is recorded).
-- [ ] `phantom apply <profile> --layers 2` still succeeds — Free tier
+- [ ] `phantom apply <profile> --layers 2` still succeeds, Free tier
       keeps Layer 2 (registry) spoofing.
 - [ ] `phantom apply <profile> --layers 1` (or `0`) refuses:
       "license tier does not permit this operation. Upgrade to Pro or
       Enterprise for Layer 0/1 access." Revocation costs the Pro-only
       layers and the higher profile limit, not Layer 2.
 
-## Section 12 — Uninstall
+## Section 12, Uninstall
 
 - [ ] Apply a fresh profile before uninstalling so we test the
       cleanup path: `phantom profile generate uninst-test` then
@@ -204,7 +204,7 @@ For each failure, open an issue with:
 ## Related
 
 - Product QA of the MSI proper: `msi-install-runbook.md`
-  (overlap intentional — that runbook is per-artifact QA, this one
+  (overlap intentional, that runbook is per-artifact QA, this one
   is customer-flow rehearsal).
 - Layer 2 end-to-end alone: `windows-runbook.md`.
 - Endpoint side of steps 4, 9, 11: `issuance-workflow.md`.

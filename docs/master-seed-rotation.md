@@ -1,4 +1,4 @@
-# Master signing seed — rotation runbook
+# Master signing seed, rotation runbook
 
 The 32-byte master seed baked into every Phantom release is the ONE
 value that authenticates a license key. If it leaks, every license
@@ -28,7 +28,7 @@ placeholder. Verified end-to-end: `cargo build --release` without
 either source aborts.
 
 The plaintext seed is XOR-scrambled into `OBFUSCATED_MASTER` and
-only the scrambled bytes ship — the seed itself is never in the
+only the scrambled bytes ship, the seed itself is never in the
 compiled binary regardless of source.
 
 ## Bake the first real vendor seed
@@ -58,7 +58,7 @@ a real endpoint):
 ```bash
 echo '8f4c...bc93' > .master_seed
 # .master_seed is git-ignored, but double-check before committing:
-git status --porcelain | grep -q '^\?\? \.master_seed$' && echo "OK — ignored"
+git status --porcelain | grep -q '^\?\? \.master_seed$' && echo "OK, ignored"
 ```
 
 Confirm: on the next `cargo build --release -p phantom-license`,
@@ -75,7 +75,7 @@ invalid. Concretely:
   key. Their `phantom license status` will report Free tier on the
   first launch after upgrading past the seed bump.
 - **Every phone-home log entry** on the vendor side becomes
-  unverifiable — the license serials referenced there were derived
+  unverifiable, the license serials referenced there were derived
   under the old seed.
 - **Every origin_mark on every profile a customer already generated**
   loses its `phantom-verify` verifiability. Profiles still load and
@@ -84,13 +84,13 @@ invalid. Concretely:
 What doesn't break:
 
 - Customer profiles keep loading. The origin_mark check is a
-  *policy*, not a *decrypt* — verification failure at import shows
+  *policy*, not a *decrypt*, verification failure at import shows
   as `Unmarked` in the CLI, and the profile applies fine on the
   local machine.
 - `PhantomConfig` and `.license.json` state files re-sign
   themselves on the next save; users don't need to reset anything
   other than their license key.
-- CLI settings, ToU/Privacy acknowledgments, profile files — all
+- CLI settings, ToU/Privacy acknowledgments, profile files, all
   untouched.
 
 **This is not a graceful upgrade.** It is the "we got compromised,
@@ -153,11 +153,11 @@ their own `PHANTOM_MASTER_SEED`, and issues their own licenses:
 ## Auditing which seed you're on
 
 `phantom self-check --json` reports `master_key_generation`:
-- `1` — you're running a build against the DEV placeholder seed.
+- `1`, you're running a build against the DEV placeholder seed.
   Do not distribute.
-- `2` — you're running a build against a real seed (env or file).
+- `2`, you're running a build against a real seed (env or file).
   Production-eligible.
-- Higher — subsequent rotations.
+- Higher, subsequent rotations.
 
 An operator seeing generation 1 in a supposedly-official install
 should file a security report. A generation 2 install matches the

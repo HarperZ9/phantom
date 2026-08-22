@@ -6,7 +6,16 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
-### Fixed — phone-home / revocation (dogfood Sections 9-11)
+## [1.0.0] - 2026-08-21
+
+First stable release. All 12 dogfood sections pass end-to-end on the
+release MSI: audit, install, license issue and activate, profile apply,
+validate, revert, reboot persistence, phone-home, opt-out, revocation,
+and clean uninstall (identity restored to baseline). Layer 2 (registry)
+is the shipped scope; Layers 0 and 1 are modeled but deferred. The MSI
+is unsigned pending a code-signing certificate.
+
+### Fixed: phone-home / revocation (dogfood Sections 9-11)
 - **Phone-home is now reachable and works end-to-end.** Three bugs made
   the license phone-home (and therefore revocation) inert:
   - `config set` rejected `phone_home_url`, `phone_home_enabled`, and
@@ -29,7 +38,7 @@ All notable changes to Phantom are documented here. Format follows
   revocation downgrades the install to Free (keeping Layer 2, refusing
   Layers 0/1).
 
-### Fixed — rc1 dogfood blockers
+### Fixed: rc1 dogfood blockers
 - **Uninstall now restores the original hardware identity (Sev-1).** The
   registry backup and profile store moved from per-user `%APPDATA%` to
   the machine-wide `%ProgramData%\Phantom`. The elevated-user CLI and the

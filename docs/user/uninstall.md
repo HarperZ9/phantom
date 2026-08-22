@@ -22,9 +22,9 @@ msiexec /x "PhantomSetup-v1.0.0.msi"
 
 The installer runs three things in order:
 
-1. `phantom-svc.exe --cleanup` — reverts every active identity
-   layer from Phantom's backup files, removes the tray autostart
-   entry, and clears the sealed config.
+1. `phantom-svc.exe --cleanup` reverts every active identity layer
+   from Phantom's backup, removes the tray autostart entry, and clears
+   the service's saved state.
 2. Stops and unregisters the **Phantom Privacy Service**.
 3. Removes `C:\Program Files\Phantom\` and its contents.
 
@@ -42,8 +42,8 @@ After uninstall, open an elevated terminal and check:
 reg query "HKLM\SOFTWARE\Microsoft\Cryptography" /v MachineGuid
 ```
 
-The value should be your **original** MachineGuid — the one you saw
-in `phantom audit` before you ever applied a profile.
+The value should be your **original** MachineGuid, the one you saw in
+`phantom audit` before you ever applied a profile.
 
 ```
 sc query PhantomService
@@ -74,7 +74,7 @@ rmdir /s /q "%ProgramData%\Phantom"
 
 Warning: this deletes your license activation record. You will need
 to re-activate with your key on the next install. The key itself is
-not consumed — it re-activates cleanly on the same machine (same
+not consumed; it re-activates cleanly on the same machine (same
 fingerprint).
 
 ## Reporting a bad uninstall

@@ -96,7 +96,7 @@ phantom license fingerprint
 
 ### Silent Deployment Checklist
 
-1. Set `PHANTOM_DATA_DIR` via GPO/MDM (optional — defaults to the
+1. Set `PHANTOM_DATA_DIR` via GPO/MDM (optional; defaults to the
    machine-wide `%ProgramData%\Phantom`)
 2. Deploy MSI with `/qn` (silent)
 3. Distribute license keys to each machine (pre-activated via `phantom license activate`)

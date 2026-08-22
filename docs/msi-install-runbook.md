@@ -13,9 +13,9 @@ Every step below runs on both. Any divergence between the two OSes is a bug — 
 
 - VM with a clean Windows install, snapshotted **before** any Phantom test.
 - Administrator account.
-- The signed MSI from the release you're validating, downloaded via the same channel a real customer would use (GitHub release page for now, `https://phantom.dev/download` in Phase 2).
+- The MSI from the release you're validating, downloaded from the GitHub release page the same way a real customer would.
 
-If you're testing an unsigned dev MSI (no cert yet — Sprint 23 pending), skip the SmartScreen sections; every SmartScreen "Windows protected your PC" click is expected on an unsigned build.
+v1.0.0 is not code-signed, so skip any Authenticode/signtool checks; every SmartScreen "Windows protected your PC" click is expected on an unsigned build. When a signing certificate lands, restore the signature-verification steps.
 
 ## Section 1 — Fresh install
 

@@ -30,6 +30,10 @@ pub fn data_dir() -> PathBuf {
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from(r"C:\ProgramData"))
             .join("Phantom")
+    } else if cfg!(target_os = "linux") {
+        // Machine-wide and root-owned, the analog of %ProgramData%. apply and
+        // revert run as root and share this store with the service.
+        PathBuf::from("/var/lib/phantom")
     } else {
         std::env::var("HOME")
             .map(|h| PathBuf::from(h).join(".config"))

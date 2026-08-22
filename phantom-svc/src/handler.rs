@@ -292,6 +292,11 @@ impl RequestHandler for PhantomHandler {
 mod tests {
     use super::*;
 
+    // Serializes the tests that set the process-global PHANTOM_DATA_DIR and
+    // touch the shared data dir, so parallel runs cannot read each other's
+    // env value.
+    static DATA_DIR_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn handler_ping() {
         let mut handler = PhantomHandler::new();
@@ -325,6 +330,7 @@ mod tests {
     /// no auto-generated "default" profile.
     #[test]
     fn fresh_handler_does_not_auto_apply() {
+        let _g = DATA_DIR_GUARD.lock().unwrap();
         let dir =
             std::env::temp_dir().join(format!("phantom-svc-noautoapply-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -422,6 +428,11 @@ mod tests {
 
     #[test]
     fn handler_generate_and_list() {
+        let _g = DATA_DIR_GUARD.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("phantom-svc-genlist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("PHANTOM_DATA_DIR", &dir);
+
         let mut handler = PhantomHandler::new();
 
         let resp = handler.handle(Request::GenerateProfile {
@@ -448,5 +459,7 @@ mod tests {
         handler.handle(Request::DeleteProfile {
             name: "svc-test-gen".into(),
         });
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::remove_var("PHANTOM_DATA_DIR");
     }
 }

@@ -50,7 +50,10 @@ pub fn revert_registry_layer(backup: &RegistryBackup) -> ApplyResult {
         let _ = backup;
         ApplyResult {
             applied: Vec::new(),
-            failed: vec![("userland".into(), "Layer-2 revert supports Windows and Linux".into())],
+            failed: vec![(
+                "userland".into(),
+                "Layer-2 revert supports Windows and Linux".into(),
+            )],
             skipped: Vec::new(),
         }
     }

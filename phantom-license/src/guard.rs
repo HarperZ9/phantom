@@ -241,6 +241,15 @@ impl LicenseGuard {
         self.license.is_some()
     }
 
+    /// The raw, validated license key for the currently-active license,
+    /// or `None` when unlicensed. This is the key that was activated and
+    /// stored in `.license.json` — the phone-home proof-of-possession is
+    /// computed over it, so callers must source the key from here (not
+    /// from the CLI config, which does not hold it).
+    pub fn key_str(&self) -> Option<&str> {
+        self.key_str.as_deref()
+    }
+
     pub fn check_layer(&self, layer: u8) -> Result<(), LicenseError> {
         // Fanout callsite: any pre-flight gate on privileged operations
         // re-runs the debugger ensemble. Patching just LicenseGuard::
@@ -321,6 +330,27 @@ mod tests {
         };
         assert!(!guard.is_licensed());
         assert_eq!(guard.tier(), LicenseTier::Free);
+    }
+
+    // Regression for the rc2 phone-home bug: the proof-of-possession is
+    // computed over the activated key, so the guard must expose it. The
+    // CLI previously read the key from its config (which `activate` never
+    // populates), sending an unlicensed serial + empty proof.
+    #[test]
+    fn key_str_exposes_activated_key() {
+        let guard = LicenseGuard {
+            license: None,
+            tier: LicenseTier::Pro,
+            key_str: Some("PHNTM-REAL-KEY".into()),
+        };
+        assert_eq!(guard.key_str(), Some("PHNTM-REAL-KEY"));
+
+        let unlicensed = LicenseGuard {
+            license: None,
+            tier: LicenseTier::Free,
+            key_str: None,
+        };
+        assert_eq!(unlicensed.key_str(), None);
     }
 
     #[test]

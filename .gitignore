@@ -16,3 +16,4 @@ endpoints/wrangler.toml
 endpoints/node_modules
 endpoints/.wrangler
 endpoints/.dev.vars
+endpoints/package-lock.json

@@ -157,10 +157,11 @@ fn main() {
 
     // Opportunistic license phone-home. Fires only when the operator
     // has acknowledged the Privacy Notice AND phone_home_enabled is
-    // not explicitly false AND phone_home_url is set AND the 24h
-    // interval has elapsed since the last call. Runs on a detached
-    // thread so we never block the user's command on the network.
-    maybe_spawn_phone_home();
+    // not explicitly false AND phone_home_url is set AND the interval
+    // has elapsed since the last call. Runs concurrently with the
+    // command so the user's output is never blocked on the network; we
+    // join it just before exit so the call actually lands.
+    let phone_home_handle = maybe_spawn_phone_home();
 
     let cli = Cli::parse();
 
@@ -944,9 +945,41 @@ fn main() {
                             "1" | "true" | "yes" | "on" | "enable" | "enabled"
                         ));
                     }
+                    // The phone-home callback the operator opts into. The
+                    // design is operator-configured (no forced vendor URL);
+                    // this is the supported way to set it. Empty / "none" /
+                    // "unset" clears it, which turns phone-home off entirely.
+                    "phone_home_url" => {
+                        cfg.phone_home_url = if value.is_empty()
+                            || value.eq_ignore_ascii_case("none")
+                            || value.eq_ignore_ascii_case("unset")
+                        {
+                            None
+                        } else {
+                            Some(value)
+                        };
+                    }
+                    // Opt out without forgetting the URL. The error path in
+                    // `license status` points operators here.
+                    "phone_home_enabled" => {
+                        cfg.phone_home_enabled = Some(matches!(
+                            value.to_ascii_lowercase().as_str(),
+                            "1" | "true" | "yes" | "on" | "enable" | "enabled"
+                        ));
+                    }
+                    // Seconds between calls (default 24h). 0 = call on every
+                    // invocation; useful for testing and for operators who
+                    // want tighter revocation latency.
+                    "phone_home_interval_secs" => match value.parse::<u64>() {
+                        Ok(n) => cfg.phone_home_interval_secs = Some(n),
+                        Err(_) => {
+                            eprintln!("  phone_home_interval_secs must be a non-negative integer");
+                            std::process::exit(1);
+                        }
+                    },
                     other => {
                         eprintln!("  Unknown config key: '{}'", other);
-                        eprintln!("  Valid keys: data_dir, pipe_name, log_level, license_key, telemetry_enabled");
+                        eprintln!("  Valid keys: data_dir, pipe_name, log_level, license_key, telemetry_enabled, phone_home_url, phone_home_enabled, phone_home_interval_secs");
                         std::process::exit(1);
                     }
                 }
@@ -1188,6 +1221,14 @@ fn main() {
             println!();
         }
     }
+
+    // Let the phone-home call finish before the process exits, so a
+    // revocation actually reaches the endpoint. The command's output has
+    // already printed; this only delays the final return, bounded by
+    // curl's --max-time (and skipped entirely when no call was started).
+    if let Some(handle) = phone_home_handle {
+        let _ = handle.join();
+    }
 }
 
 #[derive(Subcommand)]
@@ -1417,32 +1458,41 @@ fn config_after_activate() -> Option<config::PhantomConfig> {
     Some(config::load_from_file())
 }
 
-/// Fire the license phone-home in a detached thread if configuration
-/// says it's active. Never blocks the caller — the CLI proceeds
-/// immediately regardless of the endpoint's reachability. On a
-/// `{"revoked": true}` response, the tripwire records a
-/// High-severity event and the next `LicenseGuard::load()` will
-/// silently downgrade the install.
-fn maybe_spawn_phone_home() {
+/// Start the license phone-home in a background thread if configuration
+/// says it's active, returning its handle so `main` can let it finish
+/// before the process exits.
+///
+/// The command's own output is not blocked — the call runs concurrently
+/// while the command executes and prints. Only at the very end does
+/// `main` join this handle, so the process lingers just long enough for
+/// the call to land (bounded by curl's `--max-time`). This matters for
+/// revocation: a fire-and-forget thread is killed when a fast command
+/// like `license status` exits, so the callback never reaches the
+/// endpoint. On a `{"revoked": true}` response, the tripwire records a
+/// High-severity event and the next `LicenseGuard::load()` silently
+/// downgrades the install.
+fn maybe_spawn_phone_home() -> Option<std::thread::JoinHandle<()>> {
     let cfg = config::load_from_file();
     if !cfg.phone_home_active() {
-        return;
+        return None;
     }
-    let url = match cfg.phone_home_url.clone() {
-        Some(u) => u,
-        None => return,
-    };
+    let url = cfg.phone_home_url.clone()?;
     let interval = cfg
         .phone_home_interval_secs
         .unwrap_or(phantom_license::phone_home::DEFAULT_INTERVAL_SECS);
     let data_dir = profile::data_dir();
 
     if !phantom_license::phone_home::is_due(&data_dir, &url, interval) {
-        return;
+        return None;
     }
 
     let guard = phantom_license::LicenseGuard::load();
-    let key_str = cfg.license_key.clone();
+    // Source the key from the activated license (LicenseGuard reads it
+    // from .license.json), NOT from cfg.license_key, which `activate`
+    // never populates. The proof-of-possession is an HMAC over this key;
+    // sourcing it wrong sends an unlicensed serial + empty proof, which
+    // the endpoint reads as a revoked/forged install.
+    let key_str = guard.key_str().map(|s| s.to_string());
     let tier = guard.tier().to_string();
     let version = build_info::VERSION.to_string();
     let tripwire = phantom_license::tripwire::read_events(&data_dir);
@@ -1453,7 +1503,7 @@ fn maybe_spawn_phone_home() {
             phantom_license::tripwire::Severity::High => (l, h + 1),
         });
 
-    std::thread::spawn(move || {
+    Some(std::thread::spawn(move || {
         let payload = phantom_license::phone_home::build_payload(
             key_str.as_deref(),
             &tier,
@@ -1463,5 +1513,5 @@ fn maybe_spawn_phone_home() {
         );
         let _ =
             phantom_license::phone_home::maybe_phone_home(&data_dir, Some(&url), interval, payload);
-    });
+    }))
 }

@@ -6,9 +6,9 @@ licensing operator, not the customer.
 
 Two tools do the work; nothing else is required.
 
-- **`phantom-vendor`** — signs keys, computes serials, verifies
-  phone-home payloads. All local — never touches the network.
-- **`wrangler`** — Cloudflare CLI. Reads and writes the D1 licenses
+- **`phantom-vendor`**, signs keys, computes serials, verifies
+  phone-home payloads. All local, never touches the network.
+- **`wrangler`**, Cloudflare CLI. Reads and writes the D1 licenses
   table that the phone-home endpoint queries.
 
 Neither tool has a UI. The workflow is roughly six copy-pastes long.
@@ -17,7 +17,7 @@ Neither tool has a UI. The workflow is roughly six copy-pastes long.
 
 - `phantom-vendor` binary built against the production master seed.
   See `docs/master-seed-rotation.md`. `phantom-vendor` and the
-  Cloudflare Worker MUST have been built with the same seed — if
+  Cloudflare Worker MUST have been built with the same seed, if
   they diverge, every proof verification will fail and every
   legitimate install will be told it's revoked.
 - `wrangler login` completed for the operator's Cloudflare account.
@@ -44,10 +44,10 @@ enrollment blob:
 ```
 
 The customer emails or uploads this. Match it to a paid receipt
-(Stripe, invoice, wire — whatever). Confirm the requested tier
+(Stripe, invoice, wire, whatever). Confirm the requested tier
 matches what they paid for. If `master_key_generation` doesn't
 match this vendor's current seed generation, tell the customer to
-upgrade before proceeding — an old-generation install cannot
+upgrade before proceeding, an old-generation install cannot
 validate keys signed with the new seed.
 
 Record the intake in whatever CRM you use (or a plain spreadsheet):
@@ -103,7 +103,7 @@ INSERT INTO licenses (
 `issued_epoch_days` is today in Unix days (`$(( $(date +%s) / 86400 ))`).
 `expires_epoch_days` is what `phantom-vendor issue` printed. The two
 must match what was fed to `--fingerprint` and `--expires-days`
-exactly — the worker reconstructs the license key from these fields
+exactly, the worker reconstructs the license key from these fields
 and the master seed, then verifies the proof against the
 reconstructed key. Any drift → proof failure → customer's install is
 told it's revoked. Copy-paste, don't retype.
@@ -119,11 +119,11 @@ wrangler d1 execute phantom-licenses --command \
 ## 4. Deliver
 
 Send the customer the license key over a channel you'd send an
-invoice on — encrypted email, the customer portal, a signed message.
+invoice on, encrypted email, the customer portal, a signed message.
 The key is bearer material until the fingerprint binds it: whoever
 holds this string can activate on the machine that produced the
 fingerprint, and nobody else. It is not, however, a permanent
-credential — a compromised install can be revoked (§6).
+credential, a compromised install can be revoked (§6).
 
 Do **not** paste the key into public issue trackers, support
 transcripts a broader team can read, or Slack channels that log
@@ -150,7 +150,7 @@ wrangler d1 execute phantom-licenses --command \
 
 If `last_seen_at` is still NULL after ~24h and the customer says
 things are working, check the worker logs (`wrangler tail`) for
-`proof_invalid` or `unknown_serial` on that serial — a mismatch
+`proof_invalid` or `unknown_serial` on that serial, a mismatch
 between what was inserted in step 3 and what `phantom-vendor issue`
 signed in step 2.
 
@@ -168,11 +168,11 @@ WHERE serial = '265a67cc';"
 ```
 
 The customer's install picks this up on its next phone-home (worst
-case: 24h). The install then downgrades to Free tier silently — the
-tripwire path — from the following launch onward. If the customer
+case: 24h). The install then downgrades to Free tier silently, the
+tripwire path, from the following launch onward. If the customer
 disputes, `note` is the audit trail; keep it specific.
 
-To un-revoke (rare — support mistake, appeal upheld):
+To un-revoke (rare, support mistake, appeal upheld):
 
 ```bash
 wrangler d1 execute phantom-licenses --command \
@@ -196,21 +196,21 @@ phantom-vendor verify-callback ./payload.json \
 
 Verdicts:
 
-- `OK` — everything checks. The payload is authentic.
-- `SERIAL_MISMATCH` — the `license_serial` in the payload does not
+- `OK`, everything checks. The payload is authentic.
+- `SERIAL_MISMATCH`, the `license_serial` in the payload does not
   come from the key given. Either the wrong key was passed, or the
   install is running with a different key than expected.
-- `PROOF_INVALID` — the payload was not signed by this key.
+- `PROOF_INVALID`, the payload was not signed by this key.
   Somebody has the serial (from a log) but not the key.
-- `TIER_MISMATCH` — the payload's `tier` field disagrees with what
+- `TIER_MISMATCH`, the payload's `tier` field disagrees with what
   the key encodes. Tampered install.
-- `STALE` — the payload's `unix_secs` is > 15 min from now.
+- `STALE`, the payload's `unix_secs` is > 15 min from now.
   Either a replay of an old payload, or an install with a wildly
   wrong clock.
 
 `SERIAL_MISMATCH` and `PROOF_INVALID` are the flags that most often
 matter: they say "somebody who is not this customer has this
-serial." Escalate to the customer — their install may be
+serial." Escalate to the customer, their install may be
 compromised.
 
 ## 8. List and audit
@@ -244,19 +244,19 @@ wrangler d1 execute phantom-licenses --command "
 
 ## What NOT to do
 
-- **Do not** commit `wrangler.toml` — it carries account and
+- **Do not** commit `wrangler.toml`, it carries account and
   database ids. `.gitignore` blocks it; a live copy is per-operator.
 - **Do not** paste license keys or the master seed into tickets,
   chat, or public dashboards. Keys are bearer material for the
   bound machine; the seed forges every future key.
-- **Do not** hand-edit `fingerprint_hex` in D1 after issuance — the
+- **Do not** hand-edit `fingerprint_hex` in D1 after issuance, the
   reconstructed key changes and every phone-home returns
   `revoked: true`. Re-issue instead.
 - **Do not** re-use a serial you previously revoked for a new
   customer. Issue a fresh key; the serial is derived from the key,
   so a fresh key gets a fresh serial automatically. Overwriting a
   revoked row's `revoked_at` back to NULL to "reactivate" for a
-  different customer is a bug — the fingerprint no longer matches
+  different customer is a bug, the fingerprint no longer matches
   and everything the new customer does fails.
 - **Do not** run `phantom-vendor issue` against a debug-build of
   the crate. Debug builds use the placeholder seed; keys they emit

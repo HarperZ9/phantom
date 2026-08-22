@@ -6,7 +6,7 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
-### Added: Linux Layer 2 (machine-id and hostname)
+### Added: Linux Layer 2 (machine-id, hostname, and MAC)
 - **Phantom now spoofs the machine ID on Linux.** At Layer 2, `apply` writes the
   systemd machine ID (`/etc/machine-id` and the D-Bus copy at
   `/var/lib/dbus/machine-id`) derived from the profile's `machine_guid`, and
@@ -18,8 +18,13 @@ All notable changes to Phantom are documented here. Format follows
 - **Hostname too.** `apply` writes `/etc/hostname` from the profile's
   `computer_name` and sets the running hostname with `sethostname(2)` so the
   change shows without a reboot; `revert` restores the file and the live name.
-  Both ride the same backup, so a crash mid-apply stays recoverable. MAC is the
-  next increment.
+  Both ride the same backup, so a crash mid-apply stays recoverable.
+- **MAC too.** `apply` pairs each physical interface (the ones with a
+  `/sys/class/net/*/device`, so loopback and virtual interfaces are left alone)
+  with a profile adapter's MAC, by index, and sets it through iproute2; `revert`
+  restores each interface's original MAC. The original MACs ride the same backup.
+  Setting a MAC briefly drops the link, so applying over the interface you are
+  connected through will interrupt that connection.
 
 ### Fixed: registry backup integrity (reversibility hardening)
 - **A second `apply` no longer destroys the true original identity.** Apply

@@ -120,7 +120,7 @@ fn set_live_hostname(name: &str) -> std::io::Result<()> {
 /// symlink under `/sys/class/net`; loopback and virtual interfaces (veth,
 /// docker, bridges) do not, so they are skipped.
 #[cfg(target_os = "linux")]
-fn physical_interfaces() -> Vec<String> {
+pub(crate) fn physical_interfaces() -> Vec<String> {
     let mut ifaces = Vec::new();
     if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
         for entry in entries.flatten() {

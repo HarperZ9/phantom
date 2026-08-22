@@ -25,6 +25,12 @@ All notable changes to Phantom are documented here. Format follows
   restores each interface's original MAC. The original MACs ride the same backup.
   Setting a MAC briefly drops the link, so applying over the interface you are
   connected through will interrupt that connection.
+- **`audit` and `validate` read Linux now.** `phantom audit` reports the live
+  machine ID (in dashed-GUID form), hostname, and per-interface MACs on Linux,
+  and `phantom validate` compares them to the profile so a user can confirm the
+  spoof took. The deeper identifiers (SMBIOS, disk, GPU, display, TPM) are not
+  spoofed at Layer 2, so validate reports them as not-available rather than
+  flagging a mismatch.
 
 ### Fixed: registry backup integrity (reversibility hardening)
 - **A second `apply` no longer destroys the true original identity.** Apply

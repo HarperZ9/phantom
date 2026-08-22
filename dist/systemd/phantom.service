@@ -1,0 +1,25 @@
+# Phantom hardware identity privacy. Reapplies the active profile on boot.
+#
+# A spoofed MAC does not survive a reboot: the NIC comes up on its
+# hardware address. This oneshot reapplies the active profile after udev
+# has created the network devices and before networking configures them,
+# so the spoofed MAC is what the stack brings up. machine-id and hostname
+# persist on their own; reapplying them is idempotent.
+#
+# The `phantom-svc --install` command writes this same unit with the
+# running binary's path substituted; the packaged .deb/.rpm ships this
+# copy verbatim.
+[Unit]
+Description=Phantom hardware identity privacy
+Documentation=https://github.com/HarperZ9/phantom
+Wants=network-pre.target
+Before=network-pre.target
+After=systemd-udevd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/phantom-svc --reapply
+
+[Install]
+WantedBy=multi-user.target

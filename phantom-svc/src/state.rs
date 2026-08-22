@@ -1,5 +1,9 @@
-use serde::{Deserialize, Serialize};
 use std::time::Instant;
+
+/// The on-disk active-profile record. Defined once in phantom-cli (where
+/// both the CLI `apply` and this service write it) and re-exported here so
+/// there is a single shape and a single path, not two that can drift.
+pub use phantom_cli::apply::ActiveConfig as ServiceConfig;
 
 pub struct ServiceState {
     pub protected: bool,
@@ -55,30 +59,6 @@ impl ServiceState {
             layers: Vec::new(),
         }
         .save();
-    }
-}
-
-#[derive(Serialize, Deserialize, Default)]
-pub struct ServiceConfig {
-    pub active_profile: Option<String>,
-    pub auto_apply: bool,
-    pub layers: Vec<u8>,
-}
-
-impl ServiceConfig {
-    pub fn load() -> Option<Self> {
-        let path = phantom_cli::profile::profiles_dir().join(".config.json");
-        let data = std::fs::read_to_string(path).ok()?;
-        serde_json::from_str(&data).ok()
-    }
-
-    pub fn save(&self) -> Result<(), String> {
-        let dir = phantom_cli::profile::ensure_profiles_dir()
-            .map_err(|e| format!("ensure profiles dir: {}", e))?;
-        let path = dir.join(".config.json");
-        let data =
-            serde_json::to_string_pretty(self).map_err(|e| format!("serialize config: {}", e))?;
-        std::fs::write(path, data).map_err(|e| format!("write config: {}", e))
     }
 }
 

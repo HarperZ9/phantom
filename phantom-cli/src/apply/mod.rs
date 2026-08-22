@@ -1,6 +1,9 @@
+pub mod active;
 pub mod driver_ipc;
 pub mod firmware;
 pub mod registry;
+
+pub use active::ActiveConfig;
 
 // The Linux userland Layer-2 backend. Gated to Linux for the real build, and to
 // `test` everywhere so its pure machine-id derivation is covered on every host.

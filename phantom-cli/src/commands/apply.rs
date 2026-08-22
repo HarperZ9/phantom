@@ -95,6 +95,18 @@ pub fn run(name: String, layers: String) {
         }
         std::process::exit(1);
     } else {
+        // Record the applied profile so the boot-time reapply can restore
+        // it. On Linux a spoofed MAC does not survive a reboot, so the
+        // systemd unit reads this and reapplies. Gated to Linux: on Windows
+        // the registry values persist on their own and the service manages
+        // this record itself, so the CLI must not change that behavior.
+        #[cfg(target_os = "linux")]
+        {
+            if let Err(e) = apply::ActiveConfig::record_applied(&name, &layers) {
+                eprintln!("  Warning: could not record active profile for reapply-on-boot: {e}");
+            }
+        }
+
         println!(
             "  Done. Run 'phantom validate {}' to verify consistency.",
             name

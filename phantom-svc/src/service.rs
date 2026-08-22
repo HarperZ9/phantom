@@ -54,9 +54,19 @@ pub fn run_as_service() {
     {
         run_windows_service();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        eprintln!("Windows service mode is only available on Windows.");
+        // On Linux systemd runs `phantom-svc --reapply` at boot; there is
+        // no long-running daemon in this phase. Point the operator at the
+        // real entry points instead of silently doing nothing.
+        eprintln!("On Linux there is no long-running daemon.");
+        eprintln!("systemd runs 'phantom-svc --reapply' at boot. Use --install to set up");
+        eprintln!("the systemd unit, or run 'phantom apply <profile>' directly as root.");
+        std::process::exit(1);
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        eprintln!("Service mode is only available on Windows and Linux.");
         eprintln!("Use --standalone for development.");
         std::process::exit(1);
     }
@@ -67,9 +77,13 @@ pub fn install_service() {
     {
         install_windows_service();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        eprintln!("Service installation requires Windows.");
+        crate::systemd::install();
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        eprintln!("Service installation requires Windows or Linux.");
         std::process::exit(1);
     }
 }
@@ -79,9 +93,13 @@ pub fn uninstall_service() {
     {
         uninstall_windows_service();
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        eprintln!("Service removal requires Windows.");
+        crate::systemd::uninstall();
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        eprintln!("Service removal requires Windows or Linux.");
         std::process::exit(1);
     }
 }

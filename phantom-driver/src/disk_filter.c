@@ -124,8 +124,15 @@ static VOID RewriteAtaIdentify(PIRP Irp, const PHANTOM_DISK_PROFILE* Profile)
 
     ata = (ATA_PASS_THROUGH_EX*)buffer;
 
+    /*
+     * Overflow-safe bounds check. `DataBufferOffset + 512 > bufferLen` wraps
+     * when DataBufferOffset is near ULONG_MAX and would let a crafted offset
+     * pass, then point `identWords` at a wild address for the OOB write below.
+     * bufferLen >= sizeof(ATA_PASS_THROUGH_EX) + 512 from the guard above, so
+     * `bufferLen - 512` cannot underflow.
+     */
     if (ata->DataBufferOffset == 0 ||
-        ata->DataBufferOffset + 512 > bufferLen) {
+        ata->DataBufferOffset > bufferLen - 512) {
         return;
     }
 

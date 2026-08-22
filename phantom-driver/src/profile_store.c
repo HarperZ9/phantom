@@ -46,6 +46,31 @@ NTSTATUS PhantomProfileStoreSet(
         return STATUS_INVALID_PARAMETER;
     }
 
+    /*
+     * Validate every per-field length before it can drive a copy. These
+     * lengths come from userland; an out-of-range value would otherwise let
+     * a filter read past a fixed source array (disk serial/model), and in the
+     * GPU PnP path would integer-overflow the allocation size and heap-write
+     * past the buffer. The counts above are already bounded, so these loops
+     * stay in range.
+     */
+    {
+        PHANTOM_KERNEL_PROFILE* p = (PHANTOM_KERNEL_PROFILE*)Buffer;
+        ULONG i;
+        for (i = 0; i < p->DiskCount; i++) {
+            if (p->Disks[i].SerialLength > PHANTOM_MAX_SERIAL_LEN ||
+                p->Disks[i].ModelLength > PHANTOM_MAX_MODEL_LEN ||
+                p->Disks[i].FirmwareRevLength > PHANTOM_MAX_SERIAL_LEN) {
+                return STATUS_INVALID_PARAMETER;
+            }
+        }
+        for (i = 0; i < p->GpuCount; i++) {
+            if (p->Gpus[i].PnpInstanceIdLength > PHANTOM_MAX_MODEL_LEN) {
+                return STATUS_INVALID_PARAMETER;
+            }
+        }
+    }
+
     newProfile = (PHANTOM_KERNEL_PROFILE*)ExAllocatePool2(
         POOL_FLAG_NON_PAGED,
         sizeof(PHANTOM_KERNEL_PROFILE),

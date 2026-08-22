@@ -6,6 +6,17 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+### Added: Linux Layer 2 (machine-id)
+- **Phantom now spoofs the machine ID on Linux.** At Layer 2, `apply` writes the
+  systemd machine ID (`/etc/machine-id` and the D-Bus copy at
+  `/var/lib/dbus/machine-id`) derived from the profile's `machine_guid`, and
+  `revert` restores the originals exactly. It reuses the Windows backend's backup
+  discipline: the original is written to the backup before the first change, and a
+  re-apply preserves the true original rather than capturing a spoofed value. The
+  Layer-2 apply and revert dispatch now selects the Windows or Linux backend by
+  build target; the machine-wide store on Linux is `/var/lib/phantom`. hostname
+  and MAC are the next increments.
+
 ### Fixed: registry backup integrity (reversibility hardening)
 - **A second `apply` no longer destroys the true original identity.** Apply
   always captured the current registry values as the backup, so applying a

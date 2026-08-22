@@ -18,14 +18,18 @@ pub fn apply_registry_layer(profile: &HardwareProfile) -> ApplyResult {
     {
         apply_registry_windows(profile)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        crate::apply::userland_linux::apply_linux(profile)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = profile;
         ApplyResult {
             applied: Vec::new(),
             failed: vec![(
-                "registry".into(),
-                "Registry spoofing requires Windows".into(),
+                "userland".into(),
+                "Layer-2 spoofing supports Windows and Linux".into(),
             )],
             skipped: Vec::new(),
         }
@@ -37,12 +41,16 @@ pub fn revert_registry_layer(backup: &RegistryBackup) -> ApplyResult {
     {
         revert_registry_windows(backup)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        crate::apply::userland_linux::revert_linux(backup)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = backup;
         ApplyResult {
             applied: Vec::new(),
-            failed: vec![("registry".into(), "Registry revert requires Windows".into())],
+            failed: vec![("userland".into(), "Layer-2 revert supports Windows and Linux".into())],
             skipped: Vec::new(),
         }
     }
@@ -153,7 +161,7 @@ const STRING_TARGETS: &[(&str, &str, ProfileField)] = &[
 /// then revert or uninstall would restore a spoof instead of the machine's
 /// own identity. Keeping the existing entry means the true original, captured
 /// once, is never lost to a second apply.
-fn merge_preserving_originals(
+pub(crate) fn merge_preserving_originals(
     existing: Vec<RegistryBackupEntry>,
     captured: Vec<RegistryBackupEntry>,
 ) -> Vec<RegistryBackupEntry> {

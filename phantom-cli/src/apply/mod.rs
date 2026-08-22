@@ -2,6 +2,11 @@ pub mod driver_ipc;
 pub mod firmware;
 pub mod registry;
 
+// The Linux userland Layer-2 backend. Gated to Linux for the real build, and to
+// `test` everywhere so its pure machine-id derivation is covered on every host.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) mod userland_linux;
+
 use crate::profile::schema::HardwareProfile;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

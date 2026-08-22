@@ -37,11 +37,13 @@ BOOLEAN PhantomIsNicIdentIoctl(ULONG IoControlCode)
 /*
  * Check if the OID in the input buffer is a MAC address query.
  */
-static BOOLEAN IsMacAddressOid(PIRP Irp)
+static BOOLEAN IsMacAddressOid(PIRP Irp, ULONG InputLen)
 {
     ULONG* oidPtr;
 
-    if (!Irp->AssociatedIrp.SystemBuffer) {
+    /* The OID is a ULONG at the start of the input buffer; reject anything
+     * too small to hold it before dereferencing. */
+    if (!Irp->AssociatedIrp.SystemBuffer || InputLen < sizeof(ULONG)) {
         return FALSE;
     }
 
@@ -119,10 +121,8 @@ NTSTATUS PhantomInterceptNicIoctl(
     PIO_STACK_LOCATION IrpSp
 )
 {
-    UNREFERENCED_PARAMETER(IrpSp);
-
-    if (!IsMacAddressOid(Irp)) {
-        /* Not a MAC OID — pass through */
+    if (!IsMacAddressOid(Irp, IrpSp->Parameters.DeviceIoControl.InputBufferLength)) {
+        /* Not a MAC OID (or too small to be one) — pass through */
         IoSkipCurrentIrpStackLocation(Irp);
         return IoCallDriver(Ext->LowerDevice, Irp);
     }

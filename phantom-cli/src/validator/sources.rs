@@ -20,6 +20,25 @@ pub fn read_all_sources() -> Vec<SourceReadResult> {
     results
 }
 
+/// Format a 32-hex machine-id as a dashed GUID (8-4-4-4-12), the form the
+/// profile's `os.machine_guid` uses, so validate can compare them. This is the
+/// inverse of the Linux backend's dash-stripping derivation.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn format_machine_id_as_guid(hex: &str) -> Option<String> {
+    if hex.len() != 32 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let h = hex.to_ascii_lowercase();
+    Some(format!(
+        "{}-{}-{}-{}-{}",
+        &h[0..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..32]
+    ))
+}
+
 // --- Cross-platform SMBIOS binary parser ---
 
 #[allow(dead_code)]
@@ -373,7 +392,39 @@ fn read_registry_source() -> SourceReadResult {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+fn read_registry_source() -> SourceReadResult {
+    let mut ids = IdentifierMap::new();
+    let mut errors = Vec::new();
+
+    // machine-id (systemd), the analog of MachineGuid. Report it in the
+    // profile's dashed-GUID form so validate compares it to os.machine_guid.
+    match std::fs::read_to_string("/etc/machine-id") {
+        Ok(raw) => match format_machine_id_as_guid(raw.trim()) {
+            Some(guid) => {
+                ids.insert("os.machine_guid".into(), guid);
+            }
+            None => errors.push("machine-id is not 32 hex".into()),
+        },
+        Err(e) => errors.push(format!("/etc/machine-id: {}", e)),
+    }
+
+    // hostname, the analog of ComputerName.
+    match std::fs::read_to_string("/etc/hostname") {
+        Ok(raw) => {
+            ids.insert("os.computer_name".into(), raw.trim().to_string());
+        }
+        Err(e) => errors.push(format!("/etc/hostname: {}", e)),
+    }
+
+    SourceReadResult {
+        source_name: "Linux identity (machine-id, hostname)".into(),
+        identifiers: ids,
+        errors,
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn read_registry_source() -> SourceReadResult {
     SourceReadResult {
         source_name: "Windows Registry".into(),
@@ -463,7 +514,37 @@ fn read_network_source() -> SourceReadResult {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+fn read_network_source() -> SourceReadResult {
+    let mut ids = IdentifierMap::new();
+    let mut errors = Vec::new();
+
+    // Same physical interfaces, in the same sorted order, that the apply backend
+    // spoofs, so index i here is nic.i in the profile. Report the MAC uppercased
+    // to match the generated profile's format.
+    for (i, iface) in crate::apply::userland_linux::physical_interfaces()
+        .iter()
+        .enumerate()
+    {
+        match std::fs::read_to_string(format!("/sys/class/net/{}/address", iface)) {
+            Ok(raw) => {
+                ids.insert(
+                    format!("nic.{}.current_mac", i),
+                    raw.trim().to_ascii_uppercase(),
+                );
+            }
+            Err(e) => errors.push(format!("{} MAC: {}", iface, e)),
+        }
+    }
+
+    SourceReadResult {
+        source_name: "Network Adapters".into(),
+        identifiers: ids,
+        errors,
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn read_network_source() -> SourceReadResult {
     SourceReadResult {
         source_name: "Network Adapters".into(),
@@ -1112,6 +1193,21 @@ mod tests {
     }
 
     #[test]
+    fn format_machine_id_as_guid_round_trips_and_validates() {
+        // A generated profile's GUID, stripped of dashes and reformatted, comes
+        // back byte for byte, so a live machine-id validates against the profile.
+        let profile = crate::profile::engine::generate_profile("audit-seed", "test");
+        let guid = &profile.os.machine_guid;
+        let hex: String = guid.chars().filter(|c| *c != '-').collect();
+        assert_eq!(
+            format_machine_id_as_guid(&hex).as_deref(),
+            Some(guid.as_str())
+        );
+        assert_eq!(format_machine_id_as_guid("abc"), None);
+        assert_eq!(format_machine_id_as_guid(&"z".repeat(32)), None);
+    }
+
+    #[test]
     fn smbios_parser_bios_entry() {
         let bios = build_smbios_entry(0, &[1, 2], &["TestVendor", "1.0.0"]);
         let end = build_smbios_entry(127, &[], &[]);
@@ -1297,16 +1393,31 @@ mod tests {
 
     #[test]
     fn non_windows_sources_report_errors() {
-        #[cfg(not(windows))]
+        // On a platform with no source backend at all, every source reports an
+        // error rather than silently returning nothing.
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             let results = read_all_sources();
             for result in &results {
                 assert!(
                     !result.errors.is_empty(),
-                    "source '{}' should have errors on non-Windows",
+                    "source '{}' should have errors on this platform",
                     result.source_name
                 );
             }
+        }
+        // On Linux the identity (machine-id, hostname) and network sources are
+        // implemented; the five deeper sources (SMBIOS, disk, GPU, display, TPM)
+        // are still stubs and report errors.
+        #[cfg(target_os = "linux")]
+        {
+            let results = read_all_sources();
+            let with_errors = results.iter().filter(|r| !r.errors.is_empty()).count();
+            assert!(
+                with_errors >= 5,
+                "expected the five deeper sources to still report errors, saw {}",
+                with_errors
+            );
         }
     }
 }

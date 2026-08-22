@@ -1,0 +1,16 @@
+#!/bin/sh
+# Debian post-remove: reload systemd after the unit file is gone.
+#
+# The operator's profiles, license, and backup under /var/lib/phantom are
+# left in place on remove and purge, so a reinstall picks the setup back
+# up. A full wipe of that directory is a documented manual step, matching
+# the Windows uninstall behavior.
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+fi
+
+exit 0

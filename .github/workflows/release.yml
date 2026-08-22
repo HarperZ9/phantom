@@ -57,15 +57,22 @@ jobs:
       # carries the same master-key material as phantom-cli, so
       # widening its distribution widens the reverse-engineering
       # surface without helping any end user.
+      # rpmbuild is not on the ubuntu image by default; build-packages.sh
+      # skips the .rpm without it, and we want the .rpm in the release.
+      - name: Install rpm tooling (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      # Build the .deb, .rpm, and portable tarball from the release
+      # binaries. One hand-rolled script, standard distro tools, no
+      # third-party packager.
       - name: Package (Linux)
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          mkdir -p dist
-          cp target/${{ matrix.target }}/release/phantom-cli dist/phantom
-          cp target/${{ matrix.target }}/release/phantom-svc dist/
-          cp LICENSE README.md CHANGELOG.md dist/
-          tar -czf phantom-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.tar.gz -C dist .
+          bash packaging/linux/build-packages.sh \
+            "${{ env.RELEASE_VERSION }}" \
+            "target/${{ matrix.target }}/release" \
+            linux-dist
       # Sign the raw Windows PE binaries BEFORE packaging them into
       # the zip and BEFORE the MSI wraps them. The MSI carries the
       # signed exes inside its cab, and the MSI itself is signed
@@ -162,7 +169,17 @@ jobs:
           $msi = "phantom-installer/out/PhantomSetup-v$version.msi"
           if (-not (Test-Path $msi)) { throw "MSI not found at $msi" }
           cmd /c "phantom-installer\sign.cmd $msi"
-      - name: Upload artifacts
+      # Linux ships the .deb, .rpm, and tarball from linux-dist/; Windows
+      # ships its zip. Only one of these runs per matrix leg.
+      - name: Upload artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantom-${{ matrix.target }}
+          path: linux-dist/*
+          if-no-files-found: error
+      - name: Upload artifacts (Windows)
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: phantom-${{ matrix.target }}

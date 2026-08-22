@@ -1,9 +1,9 @@
 # Phantom for Linux: port specification
 
-Status: Phases 1 and 2 shipped, Phase 3 (packaging and VM dogfood) pending. Target:
-a Linux userland identity layer that matches Phantom's Windows Layer 2 in function
-and in its reversibility guarantee. macOS is explicitly out of scope (see
-[Non-goals](#non-goals)).
+Status: Phases 1 and 2 shipped; Phase 3 packaging shipped, its CI job and VM
+power-cycle dogfood pending. Target: a Linux userland identity layer that matches
+Phantom's Windows Layer 2 in function and in its reversibility guarantee. macOS is
+explicitly out of scope (see [Non-goals](#non-goals)).
 
 ## 1. Why this is a clean port, not a rewrite
 
@@ -139,9 +139,13 @@ elevation requirement. `apply`, `revert`, and the service run as root; `audit`,
    survives a reboot, leaning on the backup-preservation fix. `phantom apply`
    records the active profile and `phantom revert` clears it, giving the boot
    reapply its source of truth. The live IPC socket is deferred (see section 5).
-3. **Packaging + Linux dogfood + CI job.** Not started. A `.deb`/`.rpm` with the
-   unit, a rootful-VM CI job that exercises the real apply path, and a
-   power-cycle dogfood confirming the MAC returns after a reboot.
+3. **Packaging + Linux dogfood + CI job.** Packaging shipped: a `.deb`, an
+   `.rpm`, and a portable tarball with an install script, built by
+   `packaging/linux/build-packages.sh` and attached to the release. The `.deb`
+   install and removal cycle is dogfooded on a systemd host, including the
+   revert-on-remove Sev-1 bar. Still owed: a rootful-VM CI job that exercises the
+   real apply path, and a power-cycle dogfood confirming the MAC returns after a
+   real reboot.
 
 Each phase is independently useful and independently testable.
 

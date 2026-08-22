@@ -1,0 +1,9 @@
+# Keep LF on files that Linux tooling runs or reads, so a checkout on Windows
+# cannot rewrite a shebang (#!/bin/sh) or a systemd unit with CRLF and break
+# them. The packages and the release job are built from these verbatim.
+*.sh                          text eol=lf
+*.service                     text eol=lf
+packaging/linux/rpm-spec.in   text eol=lf
+packaging/linux/deb-postinst  text eol=lf
+packaging/linux/deb-prerm     text eol=lf
+packaging/linux/deb-postrm    text eol=lf

@@ -6,7 +6,7 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
-### Added: Linux Layer 2 (machine-id)
+### Added: Linux Layer 2 (machine-id and hostname)
 - **Phantom now spoofs the machine ID on Linux.** At Layer 2, `apply` writes the
   systemd machine ID (`/etc/machine-id` and the D-Bus copy at
   `/var/lib/dbus/machine-id`) derived from the profile's `machine_guid`, and
@@ -14,8 +14,12 @@ All notable changes to Phantom are documented here. Format follows
   discipline: the original is written to the backup before the first change, and a
   re-apply preserves the true original rather than capturing a spoofed value. The
   Layer-2 apply and revert dispatch now selects the Windows or Linux backend by
-  build target; the machine-wide store on Linux is `/var/lib/phantom`. hostname
-  and MAC are the next increments.
+  build target; the machine-wide store on Linux is `/var/lib/phantom`.
+- **Hostname too.** `apply` writes `/etc/hostname` from the profile's
+  `computer_name` and sets the running hostname with `sethostname(2)` so the
+  change shows without a reboot; `revert` restores the file and the live name.
+  Both ride the same backup, so a crash mid-apply stays recoverable. MAC is the
+  next increment.
 
 ### Fixed: registry backup integrity (reversibility hardening)
 - **A second `apply` no longer destroys the true original identity.** Apply

@@ -1,221 +1,216 @@
 # Phantom
 
-Prerelease Windows Layer-2 registry identity tooling for authorized lab evaluation.
+Hardware identity privacy for authorized Windows systems.
 
-Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, and Windows registry GUIDs. Software uses these to fingerprint your device, track you across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
+Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, and Windows registry GUIDs. Software uses these to fingerprint your device, track it across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
 
-Phantom v1.0.0-rc1 audits identifier exposure, generates internally consistent profiles, and can apply the supported registry fields in Layer 2 on organization-owned or expressly authorized Windows test systems. The current MSI does not install a kernel driver or UEFI/DXE component. Layer 1 and Layer 0 remain deferred roadmap work.
+Phantom audits what your machine reveals, generates internally consistent identity profiles, and applies them to the Windows registry identifiers software reads most often. It backs up every original value before it writes, and restores them exactly on revert or uninstall.
 
-The current release is not cleared for production or for an external enterprise pilot. CI, clean-VM lifecycle receipts, rollback and uninstall verification, operational support controls, and the service IPC privilege boundary must pass before that status changes.
+Phantom is for machines you own or are expressly authorized to test. It is not a tool for evading fraud controls or misrepresenting a device you do not control.
 
-## Getting Started
+## What v1.0.0 does
 
-### 1. Download
+- **Audit.** Read and report every hardware identifier software can see on this machine, across SMBIOS, disk, network, GPU, TPM, display, Windows registry, and boot categories. Nothing is modified.
+- **Generate.** Build a realistic, internally consistent identity profile from a seed. Samsung disk serials match Samsung's format; Intel MACs use real Intel OUI prefixes. One seed reproduces the same identity every time.
+- **Apply (Layer 2, registry).** Spoof the five Windows registry identifiers that carry the most fingerprinting weight (see [What apply changes](#what-apply-changes)).
+- **Validate.** Confirm every identifier source reports consistently after an apply.
+- **Revert.** Restore the exact original values, from a backup written before the first change.
 
-Download the latest MSI installer from [Releases](https://github.com/HarperZ9/phantom/releases).
+Layer 1 (kernel driver) and Layer 0 (UEFI/DXE firmware) are modeled but not shipped in v1.0.0. See [Scope](#scope).
 
-Verify the download against the `SHA256SUMS.txt` file included in the release:
+## Getting started
 
-```bash
+### 1. Download and verify
+
+Download `PhantomSetup-v1.0.0.msi` from [Releases](https://github.com/HarperZ9/phantom/releases), along with `SHA256SUMS.txt`.
+
+Verify the download before running it:
+
+```
 certutil -hashfile PhantomSetup-v1.0.0.msi SHA256
 ```
 
-Compare the output to the corresponding line in `SHA256SUMS.txt`.
+Compare the output to the matching line in `SHA256SUMS.txt`.
 
 ### 2. Install
 
-Double-click the MSI. Accept the UAC prompt and the license agreement. Installation takes under 30 seconds.
+Double-click the MSI. The installer is not yet code-signed, so Windows SmartScreen shows "Windows protected your PC". Click **More info**, then **Run anyway**. Accept the UAC prompt and the license agreement. Installation takes under 30 seconds.
 
-The installer places three components into `C:\Program Files\Phantom\`:
+Three components install to `C:\Program Files\Phantom\`:
 
 | Component | Purpose |
 |-----------|---------|
-| `phantom.exe` | CLI for profile management, auditing, and configuration |
-| `phantom-svc.exe` | Background service that orchestrates identity layers |
-| `phantom-tray.exe` | System tray app with status indicator and profile switching |
+| `phantom.exe` | CLI for audit, profiles, apply/revert, licensing, and configuration |
+| `phantom-svc.exe` | Background service (`PhantomService`) that re-applies your active profile across reboots |
+| `phantom-tray.exe` | System-tray status indicator, launched at login |
 
-The background service starts automatically. The tray app launches on login.
+### 3. Confirm the install
 
-### 3. Verify installation
-
-Open a terminal and run:
-
-```bash
-phantom --version
 ```
-
-Expected output: `phantom 1.0.0` (or the version you installed).
-
-Check that the service is running:
-
-```bash
+phantom --version
 sc query PhantomService
 ```
 
-The state should read `RUNNING`.
+`--version` reports `phantom 1.0.0`; the service state reads `RUNNING`.
 
-### 4. Audit your current exposure
+### 4. Audit what your machine reveals
 
-Before changing anything, see what your machine currently reveals:
-
-```bash
+```
 phantom audit
 ```
 
-This prints every hardware identifier that software can read, organized by category (SMBIOS, disk, network, GPU, TPM, display, Windows registry). Nothing is modified.
+This prints every readable hardware identifier, grouped by category. It changes nothing, so run it first to see your starting exposure.
 
-### 5. Activate a license
+### 5. Activate a license (optional)
 
-Phantom works in Free tier immediately after installation. A license key can unlock the rc1 Layer-2 feature and profile limits represented by the selected tier; it does not enable Layer 1 or Layer 0:
+Phantom runs in **Free** tier immediately, which covers Layer-2 registry spoofing and up to two profiles. A **Pro** or **Enterprise** key raises the profile limit and unlocks the deferred layers as they ship. See [Tiers and licensing](#tiers-and-licensing).
 
-```bash
-phantom license activate <your-key>
+```
+phantom license request          # prints an enrollment block to send your licensing contact
+phantom license activate <key>   # activate the key they issue back
 ```
 
-You'll be prompted to accept the Terms of Use and Privacy Notice. Type `agree` at each prompt.
-
-Check your license status at any time:
-
-```bash
-phantom license status
-```
+Activation shows the Terms of Use and Privacy Notice. Answer `y` at each prompt (or pass `--accept-tou --acknowledge-privacy-notice` for unattended installs). Check status any time with `phantom license status`.
 
 ### 6. Generate and apply a profile
 
-Create a named identity profile:
+Applying writes machine-wide registry keys, so run these from an **elevated** terminal (right-click > Run as administrator):
 
-```bash
-phantom profile generate my-profile
 ```
-
-Apply it at Layer 2 (registry-level, available on all tiers):
-
-```bash
+phantom profile generate my-profile
 phantom apply my-profile --layers 2
 ```
 
-Layer 1 kernel-driver and Layer 0 UEFI/DXE modes are not included in the current MSI and must not be represented as available.
+`apply` prints each registry value it changed and backs up the originals first.
 
-### 7. Validate
+### 7. Validate and revert
 
-Confirm that every identifier source reports consistently:
-
-```bash
-phantom validate my-profile
+```
+phantom validate my-profile   # every applied identifier should read consistently
+phantom revert                # restore the exact original values
 ```
 
-All fields should show green. Any inconsistency between sources is flagged.
+## What apply changes
 
-### 8. Revert
+At Layer 2, v1.0.0 spoofs these five Windows registry identifiers:
 
-Restore your machine to its original hardware identity at any time:
-
-```bash
-phantom revert
-```
-
-Original values are backed up before every apply and restored exactly.
-
-## Current rc1 scope
-
-| Surface | rc1 status |
+| Identifier | Registry location |
 |---|---|
-| Layer 2 registry mode | Prerelease lab evaluation only |
-| Layer 1 kernel driver | Deferred; not installed by the current MSI |
-| Layer 0 UEFI/DXE | Deferred; not included in the current MSI |
-| Enterprise deployment | Not cleared; CI, lifecycle, support, and IPC privilege-boundary gates remain |
+| MachineGuid | `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid` |
+| HwProfileGuid | `HKLM\SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001` |
+| MachineId | `HKLM\SOFTWARE\Microsoft\SQMClient\MachineId` |
+| ProductId | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProductId` |
+| InstallDate | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\InstallDate` |
 
-The codebase contains Free, Pro, and Enterprise license tiers for Layer-2 features and profile limits. Their presence does not make the rc1 build production-ready or authorize claims that Layer 1 or Layer 0 is available.
+A profile *models* a much wider identifier set (below) so it stays internally consistent as higher layers land. Everything outside the table above is modeled, not yet applied. ComputerName is modeled but deliberately not applied: writing it at the registry level alone desyncs the machine name and breaks `shutdown`, `Restart-Computer`, and WMI, so it waits for a full rename path in a later release.
 
-Do not use the current prerelease as a production privacy control. Treat it as lab tooling until the published readiness gates have current pass receipts.
+| Category | Identifiers | Applied in v1.0.0 |
+|----------|------------|---|
+| Windows registry | MachineGuid, HwProfileGuid, MachineId, ProductId, InstallDate | Yes (Layer 2) |
+| Windows registry | ComputerName | Modeled; deferred (needs a full rename) |
+| SMBIOS | Board serial, BIOS UUID, system serial, chassis asset tag, manufacturer, product name | Modeled (Layer 0) |
+| Disk | ATA serial, model, firmware revision, volume serial, volume GUID | Modeled (Layers 0/1) |
+| Network | Permanent MAC, current MAC, adapter GUID | Modeled (Layers 0/1) |
+| GPU | PCI vendor/device ID, PnP instance ID, driver key GUID | Modeled (Layer 1) |
+| TPM | Module serial, manufacturer ID | Modeled (Layer 1) |
+| Display | EDID serial, manufacturer code, product code | Modeled (Layer 1) |
+| Boot | BCD identifier GUID, boot disk signature | Modeled (Layer 0) |
 
-## Identifier model and current apply scope
+## Tiers and licensing
 
-Phantom profiles model identifier vectors across several hardware categories. In rc1, only the Layer-2 registry apply path is in the supported lab scope. Layer-1 and Layer-0 rows below describe deferred model coverage, not current apply capability.
+| Tier | Layers | Profiles | Background service |
+|------|--------|----------|--------------------|
+| Free | Layer 2 (registry) | 2 | No |
+| Pro | All layers as they ship | 50 | Yes |
+| Enterprise | All layers as they ship | Unlimited | Yes |
 
-| Category | Identifiers | Layer | rc1 apply status |
-|----------|------------|-------|---|
-| SMBIOS | Board serial, BIOS UUID, system serial, chassis asset tag, manufacturer, product name | 0 | Deferred |
-| Disk | ATA serial, model string, firmware revision, storage query serial, volume serial, volume GUID | 1, 2 | Layer-2 fields only |
-| Network | Permanent MAC, current MAC, adapter GUID (per-adapter) | 1, 2 | Layer-2 fields only |
-| GPU | PCI vendor/device ID, PnP instance ID, driver key GUID | 1 | Deferred |
-| TPM | Module serial, manufacturer ID | 1 | Deferred |
-| Display | EDID serial, manufacturer code, product code | 1 | Deferred |
-| Windows | MachineGuid, HwProfileGuid, MachineId, ProductId, InstallDate | 2 | Prerelease lab scope (ComputerName deferred — needs a full rename) |
-| Boot | BCD identifier GUID, boot disk signature | 2 | Prerelease lab scope; verify per runbook |
+Keys are HMAC-signed and bound to one machine's hardware fingerprint: a key issued for your machine is worthless on any other. `phantom license request` prints the fingerprint and build details your licensing contact needs; they issue a key bound to it. Full details in [docs/user/licensing.md](docs/user/licensing.md).
 
-Generated identifiers are vendor-accurate. Samsung disk serials match Samsung's format. Intel MACs use real Intel OUI prefixes. A single seed produces a deterministic, internally consistent identity across every vector.
+## CLI reference
 
-## CLI Reference
-
-```bash
-# Identity audit (read-only)
+```
+# Audit (read-only)
 phantom audit
 
-# Profile management
-phantom profile generate <name>
-phantom profile generate <name> --seed "memorable-string"
+# Profiles
+phantom profile generate <name> [--seed "memorable-string"]
 phantom profile show <name>
 phantom profile list
 phantom profile export <name> > profile.json
 phantom profile import profile.json
+phantom profile delete <name>
 
-# Apply and revert
+# Apply / validate / revert  (apply and revert require an elevated shell)
 phantom apply <name> --layers 2
 phantom validate <name>
 phantom revert
+phantom status
 
-# License
+# Licensing
 phantom license request
-phantom license activate <key>
+phantom license activate <key> [--accept-tou --acknowledge-privacy-notice]
 phantom license status
+phantom license fingerprint
+phantom license deactivate
 
 # Background service
 phantom service ping
 phantom service status
-phantom service protect <name> --layers 1,2
-phantom service unprotect
 
 # Configuration
-phantom config init
 phantom config show
-phantom config set <key> <value>
 phantom config path
+phantom config init
+phantom config set <key> <value>
 
-# Machine-readable output (stable JSON envelope)
+# Legal + integrity
+phantom privacy-notice
+phantom tou
+phantom self-check
+phantom tamper-report
+
+# Machine-readable output (stable JSON envelope): add --json to most commands
 phantom --json status
 phantom --json audit
 phantom --json license status
-phantom --json profile list
 ```
 
 ## Configuration
 
-Phantom resolves configuration in this order (highest wins):
-
-1. Environment variables (`PHANTOM_*`)
-2. JSON config file at `$PHANTOM_CONFIG` or `<data_dir>/config.json`
-3. Compiled defaults
+Phantom resolves configuration in this order (highest wins): environment variables (`PHANTOM_*`), then a JSON config file, then compiled defaults.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PHANTOM_DATA_DIR` | `%ProgramData%\Phantom` | Base directory for profiles, logs, config, and license state (machine-wide, shared by the CLI and the service) |
-| `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named pipe endpoint for service IPC |
-| `PHANTOM_LOG_LEVEL` | `info` | Log verbosity: `trace`, `debug`, `info`, `warn`, `error` |
-| `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate config file location |
-| `PHANTOM_TELEMETRY` | `false` | Opt-in telemetry: `on`/`off`/`1`/`0` |
+| `PHANTOM_DATA_DIR` | `%ProgramData%\Phantom` | Machine-wide store for profiles, logs, config, backup, and license state, shared by the CLI and the service |
+| `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named-pipe endpoint for service IPC |
+| `PHANTOM_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
+| `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate config-file location |
+| `PHANTOM_TELEMETRY` | `false` | Opt-in telemetry |
 
-The config file is plain JSON and safe to deploy through configuration management systems. Enterprise deployments can drop a `config.json` into a managed `PHANTOM_DATA_DIR` for centralized rollout.
+`phantom config set` accepts `data_dir`, `pipe_name`, `log_level`, `license_key`, `telemetry_enabled`, `phone_home_url`, `phone_home_enabled`, and `phone_home_interval_secs`. The config file is plain JSON and safe to deploy through configuration management.
+
+## Privacy and phone-home
+
+Phantom does not phone home unless you set a callback URL. When you do, it sends a minimal, signed payload (an opaque license serial, the tier, the Phantom version, a timestamp, and tripwire counts) at most once per interval, over `curl` so the call is visible to your host tooling. No hardware fingerprint, profile content, or machine identity leaves the machine. Disable it any time with `phantom config set phone_home_enabled false`. See [docs/user/privacy.md](docs/user/privacy.md) and `phantom privacy-notice`.
 
 ## Uninstall
 
-Uninstall through Settings > Apps or via the MSI. For rc1, validate Layer-2 backup, revert, and uninstall behavior on a disposable Windows test image before relying on it. The current MSI has no kernel-driver or firmware layer to remove.
+Uninstall through **Settings > Apps** or the MSI. Before the files are removed, Phantom reverts every applied identifier from its backup, so you are never left with a spoofed identity and no tool to restore it. Your profiles, license, and config remain under `%ProgramData%\Phantom` so a reinstall resumes where you left off; delete that folder to wipe everything. See [docs/user/uninstall.md](docs/user/uninstall.md).
 
-## System Requirements
+## System requirements
 
-- Windows 10 22H2 or Windows 11 23H2+
-- Administrator privileges for service installation and registry operations
+- Windows 10 22H2 or Windows 11 23H2 or newer
+- Administrator privileges for install, apply, and revert
+- x86-64
+
+## Scope
+
+v1.0.0 ships the Layer-2 registry path, verified end-to-end (audit, generate, apply, validate, revert, reboot persistence, phone-home, and clean uninstall) on a fresh Windows VM. It is honest about its edges:
+
+- **Layer 2 only.** Layers 1 (kernel driver) and 0 (UEFI/DXE firmware) are modeled but not shipped.
+- **Unsigned.** The MSI is not yet code-signed; SmartScreen will warn until a signing certificate is in place.
+- **Authorized use.** Intended for machines you own or are expressly authorized to test.
 
 ## License
 
-Proprietary. See [LICENSE](LICENSE) for terms.
+Proprietary. See [LICENSE](LICENSE).

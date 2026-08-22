@@ -1302,8 +1302,9 @@ enum ConfigAction {
     /// Write a default config file to disk (fails if one already exists)
     Init,
 
-    /// Set a single config key ('data_dir', 'pipe_name', 'log_level',
-    /// 'license_key', 'telemetry_enabled') and save
+    /// Set a single config key and save. Keys: 'data_dir', 'pipe_name',
+    /// 'log_level', 'license_key', 'telemetry_enabled', 'phone_home_url',
+    /// 'phone_home_enabled', 'phone_home_interval_secs'.
     Set {
         /// Config key name
         key: String,

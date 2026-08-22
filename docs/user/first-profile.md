@@ -1,27 +1,27 @@
 # Your first profile
 
 A **profile** is a saved, named identity Phantom applies to your
-machine. Generate one, apply it, verify, and (when you want your
-real identity back) revert. That's the whole loop.
+machine. Generate one, apply it, verify, and (when you want your real
+identity back) revert. That is the whole loop.
 
 ## Prerequisites
 
-- Phantom installed and [activated](activate.md) at Pro or higher.
-- Administrator terminal on the machine.
+- Phantom installed (see [install.md](install.md)). Free tier is enough
+  to apply a Layer-2 profile.
+- An Administrator terminal on the machine.
 
 ## 1. Audit what you have now
 
-Before changing anything, take a snapshot of your current identity
-so you know what "real" looks like:
+Before changing anything, snapshot your current identity so you know
+what "real" looks like:
 
 ```
 phantom audit
 ```
 
-Output includes your `MachineGuid`, your primary NIC MACs, your
-SMBIOS strings, and a summary fingerprint. Copy the fingerprint
-somewhere safe — it is your recovery reference if a revert ever
-misfires.
+Output includes your `MachineGuid`, your primary NIC MACs, your SMBIOS
+strings, and a summary fingerprint. Copy the fingerprint somewhere safe;
+it is your recovery reference if a revert ever misfires.
 
 ## 2. Generate a profile
 
@@ -29,13 +29,13 @@ misfires.
 phantom profile generate my-profile
 ```
 
-This creates a new, random identity — a fresh MachineGuid, a
-plausible OEM brand string, believable NIC vendor prefixes, etc. —
-and saves it under `%ProgramData%\Phantom\profiles\my-profile.json`.
+This creates a new, random, internally consistent identity (a fresh
+MachineGuid, a plausible OEM brand string, believable NIC vendor
+prefixes) and saves it under
+`%ProgramData%\Phantom\profiles\my-profile.json`.
 
-`generate` does **not** apply the profile yet. You can list what
-you have, inspect it, or generate several and pick the one you
-like:
+`generate` does **not** apply the profile yet. You can list what you
+have, inspect it, or generate several and pick one:
 
 ```
 phantom profile list
@@ -48,43 +48,48 @@ phantom profile show my-profile
 phantom apply my-profile --layers 2
 ```
 
-`--layers 2` is the only layer that ships in v1.0 — user-mode
-registry spoofing. It changes what Windows tells any process that
-asks for `MachineGuid`, DHCP client id, SMBIOS, and related
-identifiers. It does **not** modify actual hardware; nothing on your
-disk is at risk.
+Layer 2 is the layer that ships in v1.0.0. It rewrites the five Windows
+registry identifiers most software reads to fingerprint a machine:
+MachineGuid, HwProfileGuid, MachineId, ProductId, and InstallDate. It
+does **not** touch real hardware, and nothing on your disk is at risk.
+The rest of the profile (SMBIOS, disk, network, and so on) is modeled
+for the deferred layers, not written yet.
 
 The command runs synchronously and reports what changed:
 
 ```
-Applied 'my-profile' at layer 2 (registry).
-  HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid ← <new-guid>
-  HKLM\SOFTWARE\Microsoft\SQMClient\MachineId ← <new-id>
+Applying profile 'my-profile' to 1 layer(s)...
+
+Layer 2 (Registry/Userland) - 5 identifiers applied
+  + SOFTWARE\Microsoft\Cryptography\MachineGuid
+  + SOFTWARE\Microsoft\SQMClient\MachineId
   [3 more]
 
 Backup written to %ProgramData%\Phantom\backup.json
-Reboot recommended for changes to fully propagate.
 ```
+
+Run it from an elevated terminal: Layer 2 writes to `HKLM`, which
+requires administrator. If you are not elevated, `apply` tells you so.
 
 ## 4. Verify
 
 ```
-phantom validate
+phantom validate my-profile
 ```
 
-`validate` re-reads every key Phantom claimed to change and confirms
-the value on disk matches the profile. Green means every change is
-in place.
+`validate` re-reads every applied identifier and confirms the value on
+disk matches the profile. The Layer-2 keys read consistent; identifiers
+from the deferred layers show as not-yet-applied, which is expected.
 
-Or run `phantom audit` again and compare against your snapshot
-from step 1 — the identifiers should have moved.
+Or run `phantom audit` again and compare against your step-1 snapshot;
+the registry identifiers should have moved.
 
 ## 5. Reboot (recommended)
 
 Some Windows services cache identifiers at startup. A reboot after
-`phantom apply` ensures every application sees the new identity.
-Phantom's service restarts automatically at boot and re-asserts the
-profile if anything drifts.
+`phantom apply` ensures every application sees the new identity. On a
+Pro or Enterprise license, Phantom's service restarts at boot and
+re-asserts the profile.
 
 ## 6. Revert when you want your real identity back
 
@@ -92,54 +97,49 @@ profile if anything drifts.
 phantom revert
 ```
 
-Phantom reads the backup file it wrote during apply and restores
-every value byte-for-byte. Reboot again for good measure.
+Phantom reads the backup written during apply and restores every value
+exactly. Once every value is restored, it clears the backup, so `phantom
+status` reads original state again.
 
 ## Common patterns
 
 **Switch between two lab profiles.** Generate two profiles, then
-`phantom apply lab-a --layers 2` or `lab-b`. Each apply
-first reverts the previous profile from backup, then applies the new
-one — the two profiles don't corrupt each other.
+`phantom apply lab-a --layers 2` or `lab-b`. Each apply reverts the
+previous profile from backup first, then applies the new one, so the two
+never corrupt each other.
 
-**Regenerate a lab profile.** `phantom profile generate rolling`
-overwrites the same slot with a new random identity. Validate backup,
-apply, and revert manually on a disposable test image before adding
-any scheduled workflow.
+**Regenerate a profile.** `phantom profile generate rolling` overwrites
+the same slot with a new random identity. Validate the apply and revert
+on a disposable test image before wiring it into any scheduled workflow.
 
-**Inspect what an existing profile actually contains.**
-`phantom profile show my-profile --json` dumps the whole record;
-pipe to `jq` if you want to grep by field.
+**Inspect a profile.** `phantom --json profile show my-profile` dumps
+the whole record; pipe to `jq` to grep by field.
 
-## What you cannot do (yet)
+## What you cannot do yet
 
-- **Layer 1** — kernel filter driver that intercepts identifier
-  reads at the syscall boundary. Blocks applications that read raw
-  device serials Phantom cannot mask from user mode. Deferred; it is
-  not installed by the current MSI.
-- **Layer 0** — UEFI/DXE hooks for pre-boot identity. Niche;
-  deferred and not included in the current MSI.
-
-No externally representative application-coverage percentage has
-been established for rc1.
+- **Layer 1**, a kernel filter driver that intercepts identifier reads
+  at the syscall boundary, blocks applications that read raw device
+  serials Phantom cannot mask from user mode. Deferred; not installed by
+  the current MSI.
+- **Layer 0**, UEFI/DXE hooks for pre-boot identity. Deferred; not
+  included in the current MSI.
 
 ## Troubleshooting
 
-Nothing changed after `apply`. → Was the terminal elevated? Layer 2
-writes to `HKLM`, which requires administrator.
+Nothing changed after `apply`. Was the terminal elevated? Layer 2 writes
+to `HKLM`, which requires administrator.
 
-`revert` says "no backup". → No profile is currently applied. Run
-`phantom status` to see what Phantom thinks is active.
+`revert` says "no backup". No profile is currently applied. Run `phantom
+status` to see what Phantom thinks is active.
 
-A specific application still sees my real identity. → It probably
-reads a Layer 1 identifier (raw SATA serial, physical NIC EEPROM).
-File the app name in an issue with the identifier it reads; Layer 1
-is on the roadmap.
+A specific application still sees your real identity. It probably reads a
+Layer-1 identifier (raw SATA serial, physical NIC EEPROM) that Layer 2
+cannot mask. File the application name and the identifier it reads in an
+issue; Layer 1 is on the roadmap.
 
 ## Next steps
 
 - Read `phantom --help` for the full command surface.
 - Run `phantom privacy-notice` any time to reread what phones home.
-- [Uninstall](uninstall.md) describes the intended Layer-2 cleanup
-  path. Verify it on a disposable Windows test image before relying
-  on it.
+- [Uninstall](uninstall.md) reverts every applied identifier before
+  removing the files.

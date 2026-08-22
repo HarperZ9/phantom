@@ -1,7 +1,12 @@
 mod handler;
 mod logging;
+mod reapply;
 mod service;
 mod state;
+// The systemd unit and its install/uninstall are Linux-only. Compiled for
+// `test` on every host so the unit's drift-guard tests run in Windows CI too.
+#[cfg(any(target_os = "linux", test))]
+mod systemd;
 
 use std::env;
 
@@ -30,6 +35,12 @@ fn main() {
             }
             "--uninstall" => {
                 service::uninstall_service();
+            }
+            "--reapply" => {
+                // Boot-time (systemd) entry point on Linux: restore a
+                // spoofed MAC that a reboot reset. Safe to run by hand too.
+                logging::init(false);
+                reapply::run_reapply();
             }
             "--cleanup" => {
                 logging::init(false);
@@ -89,8 +100,7 @@ fn run_cleanup() {
     // the operator's setup back up (see docs/user/uninstall.md); a full
     // wipe is a documented manual step.
     print!("  Clearing service state... ");
-    let config_path = phantom_cli::profile::profiles_dir().join(".config.json");
-    let _ = std::fs::remove_file(config_path);
+    let _ = phantom_cli::apply::ActiveConfig::clear();
     println!("done.");
 
     println!("  Cleanup complete.");
@@ -134,10 +144,23 @@ fn print_usage() {
     println!();
     println!("Usage: phantom-svc [OPTION]");
     println!();
-    println!("  (no args)       Run as Windows service (started by SCM)");
-    println!("  --standalone    Run in foreground (for development/debugging)");
-    println!("  --install       Install as a Windows service");
-    println!("  --uninstall     Remove the Windows service");
+    #[cfg(windows)]
+    {
+        println!("  (no args)       Run as Windows service (started by SCM)");
+        println!("  --standalone    Run in foreground (for development/debugging)");
+        println!("  --install       Install as a Windows service");
+        println!("  --uninstall     Remove the Windows service");
+    }
+    #[cfg(target_os = "linux")]
+    {
+        println!("  --install       Install and enable the systemd unit (needs root)");
+        println!("  --uninstall     Disable and remove the systemd unit (needs root)");
+        println!("  --reapply       Reapply the active profile (systemd runs this at boot)");
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        println!("  --standalone    Run in foreground (for development/debugging)");
+    }
     println!("  --cleanup       Pre-uninstall: revert layers, remove auto-start");
     println!("  --help          Show this help");
 }

@@ -32,6 +32,24 @@ All notable changes to Phantom are documented here. Format follows
   spoofed at Layer 2, so validate reports them as not-available rather than
   flagging a mismatch.
 
+### Added: Linux boot persistence (systemd service)
+- **A spoofed MAC now survives a reboot on Linux.** machine-id and hostname are
+  file-based and persist on their own, but a NIC comes up on its hardware MAC
+  after a reboot. A `phantom.service` systemd unit (`Type=oneshot`, ordered
+  before networking configures the interfaces) reapplies the active profile at
+  boot, so the spoofed MAC is what the network stack brings up. Install it with
+  `phantom-svc --install` and remove it with `phantom-svc --uninstall`; both need
+  root. `--reapply` is the boot entry point and is safe to run by hand.
+- **`phantom apply` records the active profile on Linux, and `phantom revert`
+  clears it.** That record is what the boot-time reapply reads. The record shape
+  is defined once and shared by the CLI and the service, so there is one on-disk
+  file, not two that can drift. The service still reapplies only a profile the
+  operator explicitly applied; it never mints or applies one on its own.
+- Verified: builds and tests pass on Linux, `systemd-analyze verify` accepts the
+  unit, and install, enable, disable, and uninstall work on a systemd host. Not
+  yet verified: a full power-cycle dogfood confirming the MAC returns after a
+  real reboot, which needs a Linux VM with a resettable NIC.
+
 ### Fixed: registry backup integrity (reversibility hardening)
 - **A second `apply` no longer destroys the true original identity.** Apply
   always captured the current registry values as the backup, so applying a

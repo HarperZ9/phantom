@@ -1,8 +1,9 @@
 # Phantom for Linux: port specification
 
-Status: proposal, pending approval. Target: a Linux userland identity layer that
-matches Phantom's Windows Layer 2 in function and in its reversibility guarantee.
-macOS is explicitly out of scope (see [Non-goals](#non-goals)).
+Status: Phases 1 and 2 shipped, Phase 3 (packaging and VM dogfood) pending. Target:
+a Linux userland identity layer that matches Phantom's Windows Layer 2 in function
+and in its reversibility guarantee. macOS is explicitly out of scope (see
+[Non-goals](#non-goals)).
 
 ## 1. Why this is a clean port, not a rewrite
 
@@ -88,11 +89,15 @@ depends on that fix; it would be unsafe without it.
   and `/sys/class/dmi/id/*` and `lsblk`/`hdparm` for the deferred identifiers,
   so `audit` and `validate` report the full picture even where apply cannot yet
   reach.
-- Service: a `phantom.service` systemd unit replacing the Windows service, same
-  responsibilities (reapply the active profile on boot when the operator has
-  protected one, respond to the IPC socket). The named pipe becomes a Unix
-  domain socket at `/run/phantom.sock`; `phantom-ipc` already abstracts the
-  transport behind a message protocol, so the wire format is unchanged.
+- Service: a `phantom.service` systemd unit replacing the Windows service. Its
+  load-bearing job is reapply-on-boot: a `Type=oneshot` unit that runs
+  `phantom-svc --reapply` before networking configures the interfaces, so a
+  spoofed MAC is restored after a reboot. The live IPC socket is deferred: on
+  Linux the CLI applies and reverts directly as root, so a running daemon is a
+  convenience, not a correctness requirement. When it lands, the named pipe
+  becomes a Unix domain socket at `/run/phantom.sock`; `phantom-ipc` already
+  abstracts the transport behind a signed message protocol, so the wire format
+  is unchanged.
 
 ## 6. Permissions
 
@@ -126,11 +131,17 @@ elevation requirement. `apply`, `revert`, and the service run as root; `audit`,
 
 ## 9. Phasing
 
-1. **machine-id + hostname.** File-based, persistent, simplest, and the highest
-   fingerprinting value. Proves the Linux backend and the backup path end to end.
-2. **MAC + the systemd service.** Adds the reapply-on-boot path and leans on the
-   backup-preservation fix.
-3. **Packaging + Linux dogfood + CI job.** Makes it shippable and gates it.
+1. **machine-id + hostname + MAC. Shipped.** File-based identifiers first
+   (persistent, highest fingerprinting value), which proved the Linux backend and
+   the backup path end to end, then the MAC. `apply`, `revert`, `audit`, and
+   `validate` all read Linux.
+2. **The systemd service. Shipped.** The reapply-on-boot path so a spoofed MAC
+   survives a reboot, leaning on the backup-preservation fix. `phantom apply`
+   records the active profile and `phantom revert` clears it, giving the boot
+   reapply its source of truth. The live IPC socket is deferred (see section 5).
+3. **Packaging + Linux dogfood + CI job.** Not started. A `.deb`/`.rpm` with the
+   unit, a rootful-VM CI job that exercises the real apply path, and a
+   power-cycle dogfood confirming the MAC returns after a reboot.
 
 Each phase is independently useful and independently testable.
 

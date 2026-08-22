@@ -25,5 +25,15 @@ pub fn run() {
         }
     }
 
+    // Clear the active-profile record so a reboot does not reapply the
+    // profile the operator just reverted. Gated to Linux for the same
+    // reason the apply write is: on Windows the service owns this record.
+    #[cfg(target_os = "linux")]
+    {
+        if let Err(e) = apply::ActiveConfig::clear() {
+            eprintln!("  Warning: could not clear active-profile record: {e}");
+        }
+    }
+
     println!();
 }

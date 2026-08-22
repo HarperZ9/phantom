@@ -286,6 +286,7 @@ name = "phantom-cli"
 version = "1.0.0"
 dependencies = [
  "clap",
+ "libc",
  "phantom-ipc",
  "phantom-license",
  "rand",

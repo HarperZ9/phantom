@@ -6,6 +6,25 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed: registry backup integrity (reversibility hardening)
+- **A second `apply` no longer destroys the true original identity.** Apply
+  always captured the current registry values as the backup, so applying a
+  second profile without reverting first (or the service re-applying the
+  active profile on boot) overwrote the real originals with already-spoofed
+  values, and revert or uninstall then restored a spoof instead of the
+  machine's own identity. Apply now preserves the originals captured on the
+  first apply and records a fresh original only for a key it has never backed
+  up.
+- **`InstallDate` reverts as `REG_DWORD` again, not `REG_SZ`.** It is written
+  as a DWORD on apply but was restored as a string on revert, corrupting the
+  value's type. Each backup entry now carries its registry type, and revert
+  restores it as what it was. Backups written before this change still load,
+  and their string values restore as `REG_SZ` exactly as before.
+- **The backup is now written to disk before any registry value changes.**
+  Previously it saved only after every write, so a crash mid-apply could leave
+  keys spoofed with no backup and no way to revert. Apply now refuses to
+  change a value it has not first made revertible.
+
 ## [1.0.0] - 2026-08-21
 
 First stable release. All 12 dogfood sections pass end-to-end on the

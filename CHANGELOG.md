@@ -6,6 +6,29 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed — phone-home / revocation (dogfood Sections 9-11)
+- **Phone-home is now reachable and works end-to-end.** Three bugs made
+  the license phone-home (and therefore revocation) inert:
+  - `config set` rejected `phone_home_url`, `phone_home_enabled`, and
+    `phone_home_interval_secs`, so there was no way to point an install at
+    the endpoint (no compile-time default ships). They are now accepted —
+    which also makes the tool's own "Disable with: `config set
+    phone_home_enabled false`" message truthful.
+  - The payload built its proof-of-possession from `cfg.license_key`,
+    which `activate` never populates (the key lives in `.license.json`).
+    An activated install therefore phoned home with the *unlicensed*
+    serial and an empty proof, which the endpoint reads as revoked. The
+    key is now sourced from the active `LicenseGuard`.
+  - The call ran in a fire-and-forget thread that a fast command killed on
+    exit, so the callback never landed. The command still doesn't block on
+    the network, but the process now waits for the call to finish before
+    exiting (bounded by curl's `--max-time`), so revocation reliably
+    reaches the endpoint.
+- Verified against a local Worker + D1: callback lands (200), `last_seen_at`
+  updates, `phone_home_enabled false` suppresses the call, and a D1
+  revocation downgrades the install to Free (keeping Layer 2, refusing
+  Layers 0/1).
+
 ### Fixed — rc1 dogfood blockers
 - **Uninstall now restores the original hardware identity (Sev-1).** The
   registry backup and profile store moved from per-user `%APPDATA%` to

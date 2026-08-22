@@ -114,23 +114,29 @@ Back on the VM:
       → baseline value from Section 6.
 - [ ] `phantom status` → Unprotected.
 
-## Section 9 — Phone-home (24h wait or forced)
+## Section 9 — Phone-home
 
-The phone-home fires once every 24h by default. Either wait, or on
-the VM force one via the debug endpoint (if configured):
+Phone-home is operator-configured and opt-in. First point the install
+at the endpoint, then trigger a call. There is no `--force-phone-home`
+flag; the call fires on any `phantom` invocation once it is due.
 
-- [ ] `phantom license status --force-phone-home` (or wait 24h).
+- [ ] `phantom config set phone_home_url <endpoint>/license/callback`.
+- [ ] Make a call due now (instead of waiting 24h): either
+      `phantom config set phone_home_interval_secs 0`, or delete
+      `%ProgramData%\Phantom\.phone_home_last`.
+- [ ] Run any command, e.g. `phantom license status`. The process
+      lingers briefly at the end while the call completes.
 - [ ] On the vendor seat: `wrangler d1 execute phantom-licenses
       --command "SELECT serial, last_seen_at FROM licenses WHERE
       serial = '<serial>';"` — `last_seen_at` is now populated.
-- [ ] `wrangler tail` shows the request landed with no
+- [ ] `wrangler tail` shows `POST /license/callback 200` with no
       `proof_invalid` or `unknown_serial` in the log.
 
 ## Section 10 — Phone-home opt-out
 
 - [ ] `phantom config set phone_home_enabled false`.
-- [ ] Force another phone-home attempt (or wait). No new
-      `last_seen_at` update in D1 — the tool respected the setting.
+- [ ] Make a call due again (as in Section 9) and run a command. No
+      new `last_seen_at` update in D1 — the tool respected the setting.
 - [ ] `phantom config set phone_home_enabled true` restores default.
 
 ## Section 11 — Revocation
@@ -139,15 +145,22 @@ On the vendor seat:
 
 - [ ] `wrangler d1 execute phantom-licenses --command "UPDATE
       licenses SET revoked_at = $(date +%s),
-      note = 'dogfood-rc1 test revoke' WHERE serial = '<serial>';"`.
+      note = 'dogfood test revoke' WHERE serial = '<serial>';"`.
 - [ ] Confirm update.
 
 Back on the VM:
 
-- [ ] `phantom license status --force-phone-home` (or wait).
-- [ ] Next `phantom` invocation reports Tier: Free.
-- [ ] `phantom apply dogfood-rc1 --layers 2` refuses — Free tier
-      cannot apply spoofing.
+- [ ] Make a call due (as in Section 9) and run `phantom license
+      status`. The phone-home returns revoked and records a
+      High-severity tripwire.
+- [ ] The NEXT `phantom` invocation reports Tier: Free (the downgrade
+      applies on the load after the revocation is recorded).
+- [ ] `phantom apply <profile> --layers 2` still succeeds — Free tier
+      keeps Layer 2 (registry) spoofing.
+- [ ] `phantom apply <profile> --layers 1` (or `0`) refuses:
+      "license tier does not permit this operation. Upgrade to Pro or
+      Enterprise for Layer 0/1 access." Revocation costs the Pro-only
+      layers and the higher profile limit, not Layer 2.
 
 ## Section 12 — Uninstall
 

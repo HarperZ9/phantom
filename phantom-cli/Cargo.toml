@@ -20,3 +20,6 @@ phantom-license = { path = "../phantom-license" }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"

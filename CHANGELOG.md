@@ -6,6 +6,16 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-23
+
+**Cross-platform release.** Phantom now runs on Linux as well as Windows. It
+spoofs the machine ID, hostname, and MAC at Layer 2, ships as a `.deb`, an
+`.rpm`, and a portable tarball, and reapplies a spoofed MAC on boot through a
+systemd service. The Windows Layer 2 registry spoofing is unchanged. Layers 0 and
+1 remain modeled but not shipped, though the Layer 1 kernel driver now compiles
+in CI and two of its security defects are fixed (see the internal notes at the
+end of this section).
+
 ### Added: Linux Layer 2 (machine-id, hostname, and MAC)
 - **Phantom now spoofs the machine ID on Linux.** At Layer 2, `apply` writes the
   systemd machine ID (`/etc/machine-id` and the D-Bus copy at
@@ -111,6 +121,19 @@ All notable changes to Phantom are documented here. Format follows
   Previously it saved only after every write, so a crash mid-apply could leave
   keys spoofed with no backup and no way to revert. Apply now refuses to
   change a value it has not first made revertible.
+
+### Internal: Layer 1 kernel driver (not shipped)
+- **The driver compiles in CI now.** `phantom-driver` had never been built. A WDK
+  build job compiles and links it at Level4 with warnings-as-errors, which caught
+  and fixed real defects (a broken project file, functions used before
+  declaration, a missing include, dead code).
+- **Two security defects fixed.** A Sev-1 use-after-free on the active profile
+  (the getters returned a pointer that a concurrent update could free) is fixed by
+  copying under the lock. The control device is now created with an SDDL that
+  restricts it to SYSTEM and Administrators. Both compile and link; runtime
+  validation under Driver Verifier is deferred. The driver is still not shipped:
+  it is unsigned and not yet functional end to end. See
+  `docs/kernel-driver-review.md` and `docs/windows-driver-signing.md`.
 
 ## [1.0.0] - 2026-08-21
 

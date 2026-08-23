@@ -13,13 +13,13 @@ Phantom ships as a Windows MSI. Installation takes under a minute.
 
 ## 1. Download
 
-Grab `PhantomSetup-v1.0.0.msi` from the [releases page](https://github.com/HarperZ9/phantom/releases/latest),
+Grab `PhantomSetup-v1.1.0.msi` from the [releases page](https://github.com/HarperZ9/phantom/releases/latest),
 along with `SHA256SUMS.txt`. Verify the download before running it (see
 [`signature-verification.md`](../signature-verification.md)).
 
 ## 2. Run the installer
 
-Double-click `PhantomSetup-v1.0.0.msi` and accept the UAC prompt.
+Double-click `PhantomSetup-v1.1.0.msi` and accept the UAC prompt.
 
 The MSI is not yet code-signed, so Windows SmartScreen displays "Windows
 protected your PC". Click **More info**, then **Run anyway**. This
@@ -44,7 +44,7 @@ Open a terminal (PowerShell or `cmd`) and run:
 phantom --version
 ```
 
-You should see `phantom 1.0.0`. If Windows reports "phantom is not
+You should see `phantom 1.1.0`. If Windows reports "phantom is not
 recognized", close and reopen your terminal; PATH refreshes on new
 shells only.
 

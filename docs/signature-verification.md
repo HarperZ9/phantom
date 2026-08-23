@@ -20,7 +20,7 @@ plan to run, and put them in the same directory.
 ### Windows (PowerShell)
 
 ```powershell
-Get-FileHash -Algorithm SHA256 PhantomSetup-v1.0.0.msi
+Get-FileHash -Algorithm SHA256 PhantomSetup-v1.1.0.msi
 ```
 
 Compare the printed hash against the matching line in `SHA256SUMS.txt`.
@@ -44,10 +44,10 @@ shipped.
 
 ## About code signing
 
-**v1.0.0 is not code-signed.** There is no Authenticode signature on the
+**v1.1.0 is not code-signed.** There is no Authenticode signature on the
 MSI yet, so:
 
-- `signtool verify /pa PhantomSetup-v1.0.0.msi` reports **no signature**.
+- `signtool verify /pa PhantomSetup-v1.1.0.msi` reports **no signature**.
   That is expected for this release and does **not** mean the file was
   tampered with. Use the SHA-256 check above to confirm integrity.
 - Windows SmartScreen shows "Windows protected your PC" when you run the
@@ -64,7 +64,7 @@ this page will describe how.
 If `sha256sum -c` reports `FAILED` on a file downloaded directly from
 `https://github.com/HarperZ9/phantom/releases/`, open an issue with:
 
-- The release tag (`v1.0.0`, etc.)
+- The release tag (`v1.1.0`, etc.)
 - The filename
 - The hash you got locally
 - The hash `SHA256SUMS.txt` claims it should be

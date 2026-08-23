@@ -1,0 +1,73 @@
+# Drop the auto-generated /usr/lib/.build-id symlinks: they add nothing for an
+# end-user package and can clash on ownership between packages.
+%global _build_id_links none
+
+Name:           phantom
+Version:        @VERSION@
+Release:        @RELEASE@%{?dist}
+Summary:        Hardware identity privacy tool
+
+License:        Proprietary
+URL:            https://github.com/HarperZ9/phantom
+BuildArch:      x86_64
+Requires:       iproute2
+
+%description
+Phantom spoofs the userland hardware identifiers that software reads to
+fingerprint a machine: the systemd machine ID, the hostname, and the MAC of
+each physical network interface. Every change is backed up first and reverts
+exactly, so the machine returns to its true identity on request or on removal.
+A spoofed MAC does not survive a reboot on its own, so a oneshot systemd unit
+reapplies the active profile at boot.
+
+Authorized use only: machines you own or are expressly authorized to test.
+
+# The binaries are prebuilt and staged into the RPM SOURCES directory by
+# build-packages.sh; rpmbuild only assembles them. There is no compile step.
+%prep
+%build
+
+%install
+rm -rf %{buildroot}
+install -D -m 0755 %{_sourcedir}/phantom %{buildroot}/usr/bin/phantom
+install -D -m 0755 %{_sourcedir}/phantom-svc %{buildroot}/usr/sbin/phantom-svc
+install -D -m 0644 %{_sourcedir}/phantom.service %{buildroot}/usr/lib/systemd/system/phantom.service
+install -D -m 0644 %{_sourcedir}/LICENSE %{buildroot}%{_docdir}/phantom/LICENSE
+install -D -m 0644 %{_sourcedir}/README.md %{buildroot}%{_docdir}/phantom/README.md
+install -D -m 0644 %{_sourcedir}/CHANGELOG.md %{buildroot}%{_docdir}/phantom/CHANGELOG.md
+
+%files
+/usr/bin/phantom
+/usr/sbin/phantom-svc
+/usr/lib/systemd/system/phantom.service
+%dir %{_docdir}/phantom
+%{_docdir}/phantom/LICENSE
+%{_docdir}/phantom/README.md
+%{_docdir}/phantom/CHANGELOG.md
+
+%post
+# Arm the boot-time reapply on first install ($1 == 1). Do not start now:
+# nothing is reapplied until an explicit `phantom apply`.
+if [ $1 -eq 1 ] ; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable phantom.service >/dev/null 2>&1 || true
+fi
+
+%preun
+# On final erase ($1 == 0), restore the true identity BEFORE the binary is
+# removed, then disable the unit. On upgrade ($1 == 1) keep the identity.
+if [ $1 -eq 0 ] ; then
+    if [ -x /usr/sbin/phantom-svc ] ; then
+        /usr/sbin/phantom-svc --cleanup || true
+    fi
+    systemctl disable --now phantom.service >/dev/null 2>&1 || true
+fi
+
+%postun
+if [ $1 -eq 0 ] ; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+%changelog
+* @DATE@ Zain Dana Harper <17142659+HarperZ9@users.noreply.github.com> - @VERSION@-@RELEASE@
+- See CHANGELOG.md for the full history.

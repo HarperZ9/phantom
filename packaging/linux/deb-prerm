@@ -1,0 +1,24 @@
+#!/bin/sh
+# Debian pre-remove: leave the machine on its true identity.
+#
+# $1 is "remove" on a real removal and "upgrade" on an upgrade. On a real
+# removal, revert any active profile BEFORE the binaries go away, so
+# machine-id, hostname, and MAC return to their originals. This is the
+# Sev-1 bar: uninstall must not leave the machine on a spoofed identity.
+# On "upgrade" we keep the identity; the replacement package carries it
+# forward.
+set -e
+
+if [ "$1" = "remove" ]; then
+    if [ -x /usr/sbin/phantom-svc ]; then
+        # --cleanup reverts every layer from the backup and clears the
+        # active-profile record. It falls back to a direct revert when no
+        # service socket is present, which is the normal case on Linux.
+        /usr/sbin/phantom-svc --cleanup || true
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl disable --now phantom.service || true
+    fi
+fi
+
+exit 0

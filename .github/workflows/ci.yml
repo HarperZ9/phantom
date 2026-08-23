@@ -97,3 +97,41 @@ jobs:
       - name: Run audit
         run: cargo audit
         continue-on-error: true
+
+  # Build the Linux packages from debug binaries and sanity-check them, so a
+  # broken build-packages.sh, control file, or spec is caught on every push
+  # instead of only at release-tag time. Debug binaries are enough here: this
+  # checks package structure, not the shipped binary, so no master seed is
+  # needed.
+  package-linux:
+    name: package (linux smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build binaries
+        run: cargo build -p phantom-cli -p phantom-svc
+      - name: Install rpm tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Build packages
+        run: bash packaging/linux/build-packages.sh v0.0.0-ci target/debug out
+      - name: Sanity-check the artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -l out
+          deb=$(ls out/*.deb); rpm=$(ls out/*.rpm); tar=$(ls out/*.tar.gz)
+          # Capture first, then match with here-strings. Piping into `grep -q`
+          # would SIGPIPE the producer and trip `pipefail`.
+          dpkg-deb -I "$deb" >/dev/null
+          deb_files=$(dpkg-deb -c "$deb")
+          grep -q ' ./usr/sbin/phantom-svc$' <<<"$deb_files"
+          grep -q ' ./lib/systemd/system/phantom.service$' <<<"$deb_files"
+          rpm_scripts=$(rpm -qp --scripts "$rpm")
+          grep -q 'preuninstall scriptlet' <<<"$rpm_scripts"
+          rpm_files=$(rpm -qp -l "$rpm")
+          grep -qx '/usr/bin/phantom' <<<"$rpm_files"
+          tar_list=$(tar -tzf "$tar")
+          grep -q '/install.sh$' <<<"$tar_list"
+          echo "package smoke check passed"

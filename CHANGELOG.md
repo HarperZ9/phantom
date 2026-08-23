@@ -32,6 +32,25 @@ All notable changes to Phantom are documented here. Format follows
   spoofed at Layer 2, so validate reports them as not-available rather than
   flagging a mismatch.
 
+### Added: Linux packaging (.deb, .rpm, tarball)
+- **Phantom installs from a package on Linux now.** A single script,
+  `packaging/linux/build-packages.sh`, builds a Debian `.deb`, an RPM `.rpm`, and
+  a portable tarball with an install script from the release binaries, using
+  `dpkg-deb` and `rpmbuild` directly (no third-party packager). The release
+  workflow builds all three on a version tag and attaches them with
+  `SHA256SUMS.txt`.
+- **Removal restores the true identity.** The package removal hooks run
+  `phantom-svc --cleanup` before the binaries go away, so machine-id, hostname,
+  and MAC return to their originals on uninstall. An upgrade keeps the identity.
+  This holds the same Sev-1 bar as the Windows uninstall.
+- **Install arms boot persistence.** Installing enables `phantom.service` so a
+  spoofed MAC is reapplied on the next boot. Nothing is spoofed until an explicit
+  `phantom apply`. `docs/linux-install.md` covers the three install paths.
+- Verified: the `.deb` install and removal cycle is dogfooded on a systemd host
+  (install enables the unit, removal reverts and disables it), and the `.rpm`
+  scriptlets, file list, and dependencies are inspected. Not yet verified: a
+  rootful-VM CI job exercising the real apply path, and a power-cycle dogfood.
+
 ### Added: Linux boot persistence (systemd service)
 - **A spoofed MAC now survives a reboot on Linux.** machine-id and hostname are
   file-based and persist on their own, but a NIC comes up on its hardware MAC

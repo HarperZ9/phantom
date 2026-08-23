@@ -1,0 +1,16 @@
+#!/bin/sh
+# Debian post-install: arm the boot-time reapply.
+#
+# $1 is "configure" on install and upgrade. Enable the unit so a spoofed
+# MAC is reapplied on the next boot. Do not start it now: there is nothing
+# to reapply until the operator runs an explicit `phantom apply`.
+set -e
+
+if [ "$1" = "configure" ]; then
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable phantom.service || true
+    fi
+fi
+
+exit 0

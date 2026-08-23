@@ -152,3 +152,20 @@ jobs:
         run: cargo build -p phantom-cli
       - name: Apply, validate, and revert in a namespace
         run: sudo bash scripts/linux-apply-integration.sh target/debug/phantom-cli
+
+  # Compile the Layer 1 kernel driver (phantom-driver) with the WDK, delivered
+  # via NuGet so the build is pinned and reproducible. The driver is not shipped
+  # (it is unsigned and not yet functional end to end), but compiling it at
+  # Level4 with warnings-as-errors catches real bugs that no Rust test can reach.
+  # The runner supplies the driver platform toolset and the Spectre-mitigated
+  # libraries; NuGet supplies the WDK and SDK content.
+  driver-build:
+    name: driver build (WDK)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Restore WDK NuGet packages
+        run: nuget restore phantom-driver\packages.config -PackagesDirectory phantom-driver\packages
+      - name: Build driver (Release x64)
+        run: msbuild phantom-driver\phantom.vcxproj /p:Configuration=Release /p:Platform=x64 /nologo

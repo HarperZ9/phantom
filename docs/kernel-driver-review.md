@@ -48,7 +48,7 @@ The Sev-1 use-after-free is now fixed (see below). The control-device ACL remain
 open: it is a coordinated source-plus-build-file change, and it needs the same
 Driver Verifier validation the rest of Layer 1 is waiting on.
 
-### Use-after-free on the active profile (Sev-1) — FIXED
+### Use-after-free on the active profile (Sev-1): FIXED
 
 The getters (`PhantomGetDiskProfile` and the rest) read `g_ActiveProfile` without
 the lock and returned a pointer *into* the profile. A filter completion routine

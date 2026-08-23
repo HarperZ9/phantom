@@ -2,12 +2,16 @@
 
 Review of the kernel filter driver (`phantom-driver/src`, ~1811 lines of C):
 `driver.c`, `control_ipc.c`, `profile_store.c`, and the disk / NIC / GPU / TPM /
-EDID filters. This is an inspection-only review. There is no WDK in the build
-environment, so nothing here was compiled or kernel-tested. Every change below
-is reasoned from the source and MUST be built with the WDK and validated under a
-kernel debugger (Driver Verifier on, a BSOD-tolerant VM) before it is trusted.
-Kernel bugs bugcheck the machine, so the bar is higher than the unit tests can
-reach.
+EDID filters.
+
+Update: the driver now compiles and links in CI with the WDK (the `driver build
+(WDK)` job, Level4 warnings-as-errors). That build already caught real defects
+that only a compiler finds (a broken project file, functions used before
+declaration, a missing include, dead code), all fixed. So the fixes below are no
+longer source-only reasoning; they compile. What CI still cannot do is run the
+driver: kernel bugs bugcheck the machine, so every change here MUST still be
+validated under a kernel debugger (Driver Verifier on, a BSOD-tolerant VM) before
+it is trusted. That runtime validation is deferred with the rest of Layer 1.
 
 ## Fixed in this change
 
@@ -38,43 +42,34 @@ memory-safety bug and adds no new kernel API or concurrency.
   non-null. It now also requires `InputBufferLength >= sizeof(ULONG)`, threaded
   from the dispatch stack location.
 
-## Open findings (need a coordinated fix, not applied here)
+## Findings
 
-These are real and higher-severity, but the fix touches the concurrency model or
-the build configuration, which is exactly the kind of kernel change that must not
-be made blind against code that cannot be compiled or tested here.
+The Sev-1 use-after-free is now fixed (see below). The control-device ACL remains
+open: it is a coordinated source-plus-build-file change, and it needs the same
+Driver Verifier validation the rest of Layer 1 is waiting on.
 
-### Use-after-free on the active profile (Sev-1)
+### Use-after-free on the active profile (Sev-1) — FIXED
 
-`profile_store.c` claims lock-free reads via an interlocked pointer swap. It is
-not safe. The getters (`PhantomGetDiskProfile` and the rest) read
-`g_ActiveProfile` without the lock and return a pointer *into* the profile. A
-filter completion routine then dereferences that pointer while, concurrently,
-`PhantomProfileStoreSet` or `PhantomProfileStoreClear` swaps the pointer under
-the lock and `ExFreePoolWithTag`s the old profile. The reader is left holding a
-pointer into freed non-paged pool: pool corruption, then a bugcheck, under the
-exact load the driver is built for (spoofing active while a profile is updated or
-cleared).
+The getters (`PhantomGetDiskProfile` and the rest) read `g_ActiveProfile` without
+the lock and returned a pointer *into* the profile. A filter completion routine
+then dereferenced that pointer while, concurrently, `PhantomProfileStoreSet` or
+`PhantomProfileStoreClear` swapped the pointer under the lock and
+`ExFreePoolWithTag`d the old profile. The reader was left holding a pointer into
+freed non-paged pool: pool corruption, then a bugcheck, under the exact load the
+driver is built for (spoofing active while a profile is updated or cleared). The
+interlocked swap protected against a torn pointer read, not against freeing
+memory a reader was still using.
 
-The swap protects against a torn pointer read, not against freeing memory a
-reader is still using.
+**Fixed** with the copy-out design. Each getter now takes `g_ProfileLock`, copies
+the requested record into a caller-provided struct, and returns `BOOLEAN` for
+presence. The five filters read their own stack copy, so `Set`/`Clear` can free
+the old profile safely: no reader holds a pointer into it once the lock is
+released. `Set` and `Clear` are unchanged; they already free after the swap,
+which is now safe. The change compiles clean in the WDK CI build. It still needs
+Driver Verifier validation on a kernel test machine before it is trusted at
+runtime, which is deferred with the rest of Layer 1.
 
-**Fix design.** Give readers a private copy taken under the lock, or a real
-grace period:
-
-- Simplest: change each getter to copy the value out under `g_ProfileLock` into a
-  caller-provided struct, returning `BOOLEAN` for presence. The filters then read
-  their own copy, and `Set`/`Clear` may free the old profile safely because no
-  reader holds a pointer into it after the getter returns. This touches
-  `profile_store.c/.h` and the five filter call sites.
-- Or reference-count the active profile: readers take the lock, grab the pointer,
-  increment a count, drop the lock; the freer swaps under the lock and defers the
-  free until the count reaches zero.
-
-The copy-out approach is the smaller change and is recommended. It must be built
-and run under Driver Verifier before trust.
-
-### Control device has no restrictive ACL or caller check (Sev-2)
+### Control device has no restrictive ACL or caller check (Sev-2, open)
 
 `DriverEntry` creates `\Device\PhantomSpoof` with `IoCreateDevice` and
 `FILE_DEVICE_SECURE_OPEN`, but no explicit security descriptor, and
@@ -111,10 +106,11 @@ The C is substantial, but the driver does not currently function end to end:
 
 ## What shipping Layer 1 requires
 
-In order: fix the use-after-free and restrict the control device; implement filter
+Done: the use-after-free is fixed, and the driver compiles and links with the WDK
+in CI. Still owed, in order: restrict the control device; implement filter
 attach/detach and wire GPU PnP into dispatch; replace the placeholder EDID/TPM
-IOCTLs with the real ones and add PnP removal handling; then build with the WDK,
-sign the driver (an EV certificate plus Microsoft attestation signing through
-Partner Center, which is blocked while code-signing is deferred), and validate
-under a kernel debugger with Driver Verifier before any dogfood. Until the driver
+IOCTLs with the real ones and add PnP removal handling; then sign the driver (an
+EV certificate plus Microsoft attestation signing through Partner Center, the
+deferred path in `windows-driver-signing.md`), and validate under a kernel
+debugger with Driver Verifier before any dogfood. Until the driver
 is signed it loads only on a test-signing machine.

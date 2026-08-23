@@ -1,98 +1,100 @@
 # Phantom
 
-Hardware identity privacy for authorized Windows systems.
+Hardware identity privacy for authorized Windows and Linux systems.
 
-Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, and Windows registry GUIDs. Software uses these to fingerprint your device, track it across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
+Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, the Windows registry machine GUID, the Linux machine ID. Software uses these to fingerprint your device, track it across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
 
-Phantom audits what your machine reveals, generates internally consistent identity profiles, and applies them to the Windows registry identifiers software reads most often. It backs up every original value before it writes, and restores them exactly on revert or uninstall.
+Phantom audits what your machine reveals, generates internally consistent identity profiles, and applies them to the identifiers software reads most often. It backs up every original value before it writes, and restores them exactly on revert or uninstall.
 
 Phantom is for machines you own or are expressly authorized to test. It is not a tool for evading fraud controls or misrepresenting a device you do not control.
 
-## What v1.0.0 does
+## What v1.1.0 does
 
-- **Audit.** Read and report every hardware identifier software can see on this machine, across SMBIOS, disk, network, GPU, TPM, display, Windows registry, and boot categories. Nothing is modified.
+- **Audit.** Read and report every hardware identifier software can see on this machine. Nothing is modified.
 - **Generate.** Build a realistic, internally consistent identity profile from a seed. Samsung disk serials match Samsung's format; Intel MACs use real Intel OUI prefixes. One seed reproduces the same identity every time.
-- **Apply (Layer 2, registry).** Spoof the five Windows registry identifiers that carry the most fingerprinting weight (see [What apply changes](#what-apply-changes)).
+- **Apply (Layer 2).** On Windows, spoof the five registry identifiers that carry the most fingerprinting weight. On Linux, spoof the machine ID, the hostname, and the MAC of each physical interface. See [What apply changes](#what-apply-changes).
 - **Validate.** Confirm every identifier source reports consistently after an apply.
 - **Revert.** Restore the exact original values, from a backup written before the first change.
 
-Layer 1 (kernel driver) and Layer 0 (UEFI/DXE firmware) are modeled but not shipped in v1.0.0. See [Scope](#scope).
+Layer 1 (kernel driver) and Layer 0 (UEFI/DXE firmware) are modeled but not shipped. See [Scope](#scope).
 
-## Getting started
+## Getting started on Windows
 
 ### 1. Download and verify
 
-Download `PhantomSetup-v1.0.0.msi` from [Releases](https://github.com/HarperZ9/phantom/releases), along with `SHA256SUMS.txt`.
-
-Verify the download before running it:
+Download `PhantomSetup-v1.1.0.msi` from [Releases](https://github.com/HarperZ9/phantom/releases), along with `SHA256SUMS.txt`. Verify it before running:
 
 ```
-certutil -hashfile PhantomSetup-v1.0.0.msi SHA256
+certutil -hashfile PhantomSetup-v1.1.0.msi SHA256
 ```
 
 Compare the output to the matching line in `SHA256SUMS.txt`.
 
 ### 2. Install
 
-Double-click the MSI. The installer is not yet code-signed, so Windows SmartScreen shows "Windows protected your PC". Click **More info**, then **Run anyway**. Accept the UAC prompt and the license agreement. Installation takes under 30 seconds.
+Double-click the MSI. The installer is not yet code-signed, so Windows SmartScreen shows "Windows protected your PC". Click **More info**, then **Run anyway**. Accept the UAC prompt and the license agreement. Three components install to `C:\Program Files\Phantom\`: the `phantom.exe` CLI, the `phantom-svc.exe` background service that reapplies your active profile across reboots, and the `phantom-tray.exe` status indicator.
 
-Three components install to `C:\Program Files\Phantom\`:
+### 3. Use it
 
-| Component | Purpose |
-|-----------|---------|
-| `phantom.exe` | CLI for audit, profiles, apply/revert, licensing, and configuration |
-| `phantom-svc.exe` | Background service (`PhantomService`) that re-applies your active profile across reboots |
-| `phantom-tray.exe` | System-tray status indicator, launched at login |
+Applying writes machine-wide registry keys, so run `apply` and `revert` from an **elevated** terminal (right-click > Run as administrator).
 
-### 3. Confirm the install
+```
+phantom --version                       # reports phantom 1.1.0
+phantom audit                           # read-only: see your starting exposure
+phantom profile generate my-profile
+phantom apply my-profile --layers 2     # elevated
+phantom validate my-profile
+phantom revert                          # elevated: restore the originals
+```
+
+## Getting started on Linux
+
+Phantom ships as a `.deb`, an `.rpm`, and a portable tarball. All three install the CLI, the service binary, and a systemd unit. `apply` and `revert` need root, and setting a MAC needs `iproute2`.
+
+### 1. Install
+
+```
+# Debian / Ubuntu
+sudo apt-get install ./phantom_1.1.0-1_amd64.deb
+
+# Fedora / RHEL / openSUSE
+sudo dnf install ./phantom-1.1.0-1.x86_64.rpm      # or: sudo zypper install ...
+
+# Any distro (portable tarball)
+tar -xzf phantom-1.1.0-x86_64-linux.tar.gz && cd phantom-1.1.0-x86_64-linux && sudo ./install.sh
+```
+
+Installing enables `phantom.service`, which reapplies your active profile on boot. Nothing changes on your machine until you run an explicit `apply`.
+
+### 2. Use it
 
 ```
 phantom --version
-sc query PhantomService
+phantom audit                           # read-only
+phantom profile generate my-profile
+sudo phantom apply my-profile           # spoof machine-id, hostname, and MAC
+phantom validate my-profile
+sudo phantom revert                     # restore the originals
 ```
 
-`--version` reports `phantom 1.0.0`; the service state reads `RUNNING`.
+A spoofed MAC does not survive a reboot on its own, so `phantom.service` reapplies it at boot. machine-id and hostname are file-based and persist on their own. This is verified on a real Linux VM through a power-cycle (see `docs/linux-vm-dogfood.md`). Full install detail is in [docs/linux-install.md](docs/linux-install.md).
 
-### 4. Audit what your machine reveals
+### License activation (both platforms)
 
-```
-phantom audit
-```
-
-This prints every readable hardware identifier, grouped by category. It changes nothing, so run it first to see your starting exposure.
-
-### 5. Activate a license (optional)
-
-Phantom runs in **Free** tier immediately, which covers Layer-2 registry spoofing and up to two profiles. A **Pro** or **Enterprise** key raises the profile limit and unlocks the deferred layers as they ship. See [Tiers and licensing](#tiers-and-licensing).
+Phantom runs in **Free** tier immediately, which covers Layer-2 spoofing and up to two profiles. A **Pro** or **Enterprise** key raises the profile limit and unlocks the deferred layers as they ship.
 
 ```
 phantom license request          # prints an enrollment block to send your licensing contact
 phantom license activate <key>   # activate the key they issue back
 ```
 
-Activation shows the Terms of Use and Privacy Notice. Answer `y` at each prompt (or pass `--accept-tou --acknowledge-privacy-notice` for unattended installs). Check status any time with `phantom license status`.
-
-### 6. Generate and apply a profile
-
-Applying writes machine-wide registry keys, so run these from an **elevated** terminal (right-click > Run as administrator):
-
-```
-phantom profile generate my-profile
-phantom apply my-profile --layers 2
-```
-
-`apply` prints each registry value it changed and backs up the originals first.
-
-### 7. Validate and revert
-
-```
-phantom validate my-profile   # every applied identifier should read consistently
-phantom revert                # restore the exact original values
-```
+Activation shows the Terms of Use and Privacy Notice. Answer `y` at each prompt (or pass `--accept-tou --acknowledge-privacy-notice` for unattended installs).
 
 ## What apply changes
 
-At Layer 2, v1.0.0 spoofs these five Windows registry identifiers:
+At Layer 2, `apply` spoofs the userland-reversible identifiers, the ones an ordinary process reads and that Phantom can change and restore exactly without touching firmware.
+
+**Windows** (five registry identifiers):
 
 | Identifier | Registry location |
 |---|---|
@@ -102,25 +104,25 @@ At Layer 2, v1.0.0 spoofs these five Windows registry identifiers:
 | ProductId | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProductId` |
 | InstallDate | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\InstallDate` |
 
-A profile *models* a much wider identifier set (below) so it stays internally consistent as higher layers land. Everything outside the table above is modeled, not yet applied. ComputerName is modeled but deliberately not applied: writing it at the registry level alone desyncs the machine name and breaks `shutdown`, `Restart-Computer`, and WMI, so it waits for a full rename path in a later release.
+ComputerName is modeled but deliberately not applied on Windows: writing it at the registry level alone desyncs the machine name and breaks `shutdown`, `Restart-Computer`, and WMI, so it waits for a full rename path.
 
-| Category | Identifiers | Applied in v1.0.0 |
-|----------|------------|---|
-| Windows registry | MachineGuid, HwProfileGuid, MachineId, ProductId, InstallDate | Yes (Layer 2) |
-| Windows registry | ComputerName | Modeled; deferred (needs a full rename) |
-| SMBIOS | Board serial, BIOS UUID, system serial, chassis asset tag, manufacturer, product name | Modeled (Layer 0) |
-| Disk | ATA serial, model, firmware revision, volume serial, volume GUID | Modeled (Layers 0/1) |
-| Network | Permanent MAC, current MAC, adapter GUID | Modeled (Layers 0/1) |
-| GPU | PCI vendor/device ID, PnP instance ID, driver key GUID | Modeled (Layer 1) |
-| TPM | Module serial, manufacturer ID | Modeled (Layer 1) |
-| Display | EDID serial, manufacturer code, product code | Modeled (Layer 1) |
-| Boot | BCD identifier GUID, boot disk signature | Modeled (Layer 0) |
+**Linux** (three identifiers):
+
+| Identifier | Location |
+|---|---|
+| machine-id | `/etc/machine-id` and `/var/lib/dbus/machine-id` |
+| hostname | `/etc/hostname` and the live `sethostname()` |
+| MAC (per physical interface) | `ip link set dev <if> address` |
+
+Hostname is safe to spoof at Layer 2 on Linux, unlike Windows, so `apply` changes it there.
+
+A profile *models* a much wider identifier set (SMBIOS and board serials, disk serials, GPU, TPM, display, boot) so it stays internally consistent as higher layers land. Everything outside the tables above is modeled, not yet applied, because it lives in firmware or the kernel (Layers 0 and 1).
 
 ## Tiers and licensing
 
 | Tier | Layers | Profiles | Background service |
 |------|--------|----------|--------------------|
-| Free | Layer 2 (registry) | 2 | No |
+| Free | Layer 2 | 2 | No |
 | Pro | All layers as they ship | 50 | Yes |
 | Enterprise | All layers as they ship | Unlimited | Yes |
 
@@ -140,7 +142,7 @@ phantom profile export <name> > profile.json
 phantom profile import profile.json
 phantom profile delete <name>
 
-# Apply / validate / revert  (apply and revert require an elevated shell)
+# Apply / validate / revert  (apply and revert need elevation on Windows, root on Linux)
 phantom apply <name> --layers 2
 phantom validate <name>
 phantom revert
@@ -153,14 +155,9 @@ phantom license status
 phantom license fingerprint
 phantom license deactivate
 
-# Background service
-phantom service ping
-phantom service status
-
 # Configuration
 phantom config show
 phantom config path
-phantom config init
 phantom config set <key> <value>
 
 # Legal + integrity
@@ -172,22 +169,18 @@ phantom tamper-report
 # Machine-readable output (stable JSON envelope): add --json to most commands
 phantom --json status
 phantom --json audit
-phantom --json license status
 ```
 
 ## Configuration
 
 Phantom resolves configuration in this order (highest wins): environment variables (`PHANTOM_*`), then a JSON config file, then compiled defaults.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PHANTOM_DATA_DIR` | `%ProgramData%\Phantom` | Machine-wide store for profiles, logs, config, backup, and license state, shared by the CLI and the service |
-| `PHANTOM_PIPE_NAME` | `\\.\pipe\PhantomService` | Named-pipe endpoint for service IPC |
-| `PHANTOM_LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
-| `PHANTOM_CONFIG` | `<data_dir>/config.json` | Alternate config-file location |
-| `PHANTOM_TELEMETRY` | `false` | Opt-in telemetry |
-
-`phantom config set` accepts `data_dir`, `pipe_name`, `log_level`, `license_key`, `telemetry_enabled`, `phone_home_url`, `phone_home_enabled`, and `phone_home_interval_secs`. The config file is plain JSON and safe to deploy through configuration management.
+| Variable | Default (Windows) | Default (Linux) | Description |
+|----------|---------|---------|-------------|
+| `PHANTOM_DATA_DIR` | `%ProgramData%\Phantom` | `/var/lib/phantom` | Machine-wide store for profiles, logs, config, backup, and license state |
+| `PHANTOM_LOG_LEVEL` | `info` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
+| `PHANTOM_CONFIG` | `<data_dir>/config.json` | `<data_dir>/config.json` | Alternate config-file location |
+| `PHANTOM_TELEMETRY` | `false` | `false` | Opt-in telemetry |
 
 ## Privacy and phone-home
 
@@ -195,20 +188,30 @@ Phantom does not phone home unless you set a callback URL. When you do, it sends
 
 ## Uninstall
 
-Uninstall through **Settings > Apps** or the MSI. Before the files are removed, Phantom reverts every applied identifier from its backup, so you are never left with a spoofed identity and no tool to restore it. Your profiles, license, and config remain under `%ProgramData%\Phantom` so a reinstall resumes where you left off; delete that folder to wipe everything. See [docs/user/uninstall.md](docs/user/uninstall.md).
+On either platform, removal reverts every applied identifier from its backup first, so you are never left with a spoofed identity and no tool to restore it. Your profiles, license, and config remain in the data directory so a reinstall resumes where you left off; delete that directory to wipe everything.
+
+```
+# Windows: Settings > Apps, or the MSI
+# Debian / Ubuntu
+sudo apt-get remove phantom
+# Fedora / RHEL
+sudo dnf remove phantom
+# Tarball install
+sudo ./uninstall.sh
+```
 
 ## System requirements
 
-- Windows 10 22H2 or Windows 11 23H2 or newer
-- Administrator privileges for install, apply, and revert
-- x86-64
+- **Windows** 10 22H2 or Windows 11 23H2 or newer; Administrator privileges for install, apply, and revert.
+- **Linux** with systemd; root for apply and revert; `iproute2` for MAC spoofing.
+- x86-64.
 
 ## Scope
 
-v1.0.0 ships the Layer-2 registry path, verified end-to-end (audit, generate, apply, validate, revert, reboot persistence, phone-home, and clean uninstall) on a fresh Windows VM. It is honest about its edges:
+Phantom ships the Layer-2 path on both platforms, verified end to end (audit, generate, apply, validate, revert, reboot persistence, and clean uninstall) on fresh Windows and Linux VMs. It is honest about its edges:
 
-- **Layer 2 only.** Layers 1 (kernel driver) and 0 (UEFI/DXE firmware) are modeled but not shipped.
-- **Unsigned.** The MSI is not yet code-signed; SmartScreen will warn until a signing certificate is in place.
+- **Layer 2 only.** Layers 1 (kernel driver) and 0 (UEFI/DXE firmware) are modeled but not shipped. The Layer 1 kernel driver now compiles in CI and two of its security defects are fixed, but it is unsigned and not yet functional end to end. See `docs/kernel-driver-review.md` and `docs/windows-driver-signing.md`.
+- **Unsigned.** The Windows MSI is not yet code-signed; SmartScreen will warn until a signing certificate is in place. The Linux packages ship with published `SHA256SUMS.txt`.
 - **Authorized use.** Intended for machines you own or are expressly authorized to test.
 
 ## License

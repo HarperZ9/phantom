@@ -48,7 +48,7 @@ phantom profile show my-profile
 phantom apply my-profile --layers 2
 ```
 
-Layer 2 is the layer that ships in v1.0.0. It rewrites the five Windows
+Layer 2 is the layer that ships in v1.1.0. It rewrites the five Windows
 registry identifiers most software reads to fingerprint a machine:
 MachineGuid, HwProfileGuid, MachineId, ProductId, and InstallDate. It
 does **not** touch real hardware, and nothing on your disk is at risk.

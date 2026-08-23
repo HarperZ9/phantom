@@ -23,7 +23,7 @@ set WXS=%SCRIPT_DIR%phantom.wxs
 set OUT_DIR=%SCRIPT_DIR%out
 set OBJ=%OUT_DIR%\phantom.wixobj
 
-if "%PHANTOM_MSI_VERSION%"=="" set PHANTOM_MSI_VERSION=1.0.0
+if "%PHANTOM_MSI_VERSION%"=="" set PHANTOM_MSI_VERSION=1.1.0
 set MSI=%OUT_DIR%\PhantomSetup-v%PHANTOM_MSI_VERSION%.msi
 
 if "%1"=="clean" (

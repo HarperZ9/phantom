@@ -15,7 +15,7 @@ with a spoofed identity and no tool to fix it.
 Or from an elevated terminal:
 
 ```
-msiexec /x "PhantomSetup-v1.0.0.msi"
+msiexec /x "PhantomSetup-v1.1.0.msi"
 ```
 
 ## What happens during uninstall

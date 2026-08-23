@@ -33,6 +33,12 @@
 #define ATA_IDENT_FWREV_WORD_START   23
 #define ATA_IDENT_FWREV_WORD_COUNT   4    /* 8 bytes  */
 
+/* Forward declarations: these rewrite helpers are defined below but called by
+ * the completion routine above them. */
+static VOID RewriteAtaIdentify(PIRP Irp, const PHANTOM_DISK_PROFILE* Profile);
+static VOID RewriteStorageDescriptor(PIRP Irp, const PHANTOM_DISK_PROFILE* Profile);
+static VOID WriteAtaString(PUSHORT Dest, ULONG WordCount, const CHAR* Source, ULONG SourceLen);
+
 BOOLEAN PhantomIsDiskIdentIoctl(ULONG IoControlCode)
 {
     return (IoControlCode == IOCTL_STORAGE_QUERY_PROPERTY ||

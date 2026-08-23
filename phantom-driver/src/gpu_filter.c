@@ -61,7 +61,6 @@ static NTSTATUS GpuPnpQueryIdCompletion(
 )
 {
     PPHANTOM_FILTER_EXT ext = (PPHANTOM_FILTER_EXT)Context;
-    PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
     const PHANTOM_GPU_PROFILE* profile;
     PWCHAR originalId;
     PWCHAR newId;

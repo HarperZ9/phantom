@@ -22,6 +22,7 @@
 
 #include "phantom.h"
 #include "profile_store.h"
+#include "timing.h"
 
 /* TPM2 command codes */
 #define TPM2_CC_GET_CAPABILITY  0x0000017A

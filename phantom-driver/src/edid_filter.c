@@ -17,6 +17,7 @@
 
 #include "phantom.h"
 #include "profile_store.h"
+#include "timing.h"
 
 /* EDID byte offsets */
 #define EDID_MANUFACTURER_OFFSET    8

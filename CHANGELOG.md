@@ -42,6 +42,19 @@ All notable changes to Phantom are documented here. Format follows
   consistency check that unit tests cannot reach. The MAC path needs a physical
   NIC and stays for the VM dogfood; a namespace has no physical interfaces.
 
+### Added: Linux verification (rootful apply test + VM dogfood)
+- **The real apply path runs in CI.** `scripts/linux-apply-integration.sh` runs
+  `apply`, `validate`, and `revert` for machine-id and hostname as root, isolated
+  in a mount, UTS, and network namespace so the runner's identity is untouched. A
+  CI job runs it on every push.
+- **MAC persistence across a reboot is proven on a real VM.** A VirtualBox Ubuntu
+  24.04 dogfood: install, apply, power-cycle, and the NIC came back up on the
+  spoofed MAC because `phantom.service` reapplied it at boot; machine-id and
+  hostname persisted; and package removal restored the true identity. The values
+  are deterministic from the profile seed and are recorded in
+  `docs/linux-vm-dogfood.md`. This closes the one guarantee that needed real
+  hardware.
+
 ### Added: Linux packaging (.deb, .rpm, tarball)
 - **Phantom installs from a package on Linux now.** A single script,
   `packaging/linux/build-packages.sh`, builds a Debian `.deb`, an RPM `.rpm`, and
@@ -58,8 +71,8 @@ All notable changes to Phantom are documented here. Format follows
   `phantom apply`. `docs/linux-install.md` covers the three install paths.
 - Verified: the `.deb` install and removal cycle is dogfooded on a systemd host
   (install enables the unit, removal reverts and disables it), and the `.rpm`
-  scriptlets, file list, and dependencies are inspected. Not yet verified: a
-  rootful-VM CI job exercising the real apply path, and a power-cycle dogfood.
+  scriptlets, file list, and dependencies are inspected. The rootful apply CI job
+  and the power-cycle VM dogfood both shipped after this; see their entries.
 
 ### Added: Linux boot persistence (systemd service)
 - **A spoofed MAC now survives a reboot on Linux.** machine-id and hostname are
@@ -75,9 +88,10 @@ All notable changes to Phantom are documented here. Format follows
   file, not two that can drift. The service still reapplies only a profile the
   operator explicitly applied; it never mints or applies one on its own.
 - Verified: builds and tests pass on Linux, `systemd-analyze verify` accepts the
-  unit, and install, enable, disable, and uninstall work on a systemd host. Not
-  yet verified: a full power-cycle dogfood confirming the MAC returns after a
-  real reboot, which needs a Linux VM with a resettable NIC.
+  unit, and install, enable, disable, and uninstall work on a systemd host.
+  Reboot persistence is now dogfooded on a real VM: after a power-cycle the NIC
+  came up on its hardware MAC and `phantom.service` reapplied the spoofed MAC, and
+  a package removal restored the true identity. See `docs/linux-vm-dogfood.md`.
 
 ### Fixed: registry backup integrity (reversibility hardening)
 - **A second `apply` no longer destroys the true original identity.** Apply

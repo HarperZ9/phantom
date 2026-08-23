@@ -161,11 +161,15 @@ jobs:
   # libraries; NuGet supplies the WDK and SDK content.
   driver-build:
     name: driver build (WDK)
-    runs-on: windows-2025
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-      - name: Restore WDK NuGet packages
-        run: nuget restore phantom-driver\packages.config -PackagesDirectory phantom-driver\packages
+      # Build against the runner's preinstalled WDK (windows-2022 ships WDK 22H2
+      # with the driver toolset and Spectre-mitigated libraries), which keeps the
+      # build task assemblies in step with the runner's Visual Studio. The pinned
+      # WDK NuGet packages (packages.config, Directory.Build.props) are for
+      # reproducible local builds; they stay inert here because nothing restores
+      # them, so Directory.Build.props imports evaluate to false.
       - name: Build driver (Release x64)
         run: msbuild phantom-driver\phantom.vcxproj /p:Configuration=Release /p:Platform=x64 /nologo

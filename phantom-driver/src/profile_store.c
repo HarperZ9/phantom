@@ -1,8 +1,11 @@
 /*
  * profile_store.c — kernel-side profile storage.
  *
- * Stores the active spoofing profile in non-paged pool. Updates are atomic
- * via interlocked pointer swap so filter threads never see a torn read.
+ * Stores the active spoofing profile in non-paged pool. A spin lock guards the
+ * pointer: Set and Clear swap it and free the old profile under the lock, and
+ * readers copy the fields they need out under the same lock. That is what makes
+ * the free safe: no reader ever holds a pointer into a profile after the lock is
+ * released, so Set/Clear can never free memory a reader is still using.
  */
 
 #include "profile_store.h"
@@ -114,47 +117,72 @@ BOOLEAN PhantomProfileIsActive(VOID)
     return (g_ActiveProfile != NULL);
 }
 
-const PHANTOM_DISK_PROFILE* PhantomGetDiskProfile(_In_ ULONG Index)
+BOOLEAN PhantomGetDiskProfile(_In_ ULONG Index, _Out_ PHANTOM_DISK_PROFILE* Out)
 {
-    PHANTOM_KERNEL_PROFILE* p = g_ActiveProfile;
-    if (!p || Index >= p->DiskCount) {
-        return NULL;
+    KIRQL oldIrql;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&g_ProfileLock, &oldIrql);
+    if (g_ActiveProfile && Index < g_ActiveProfile->DiskCount) {
+        RtlCopyMemory(Out, &g_ActiveProfile->Disks[Index], sizeof(*Out));
+        found = TRUE;
     }
-    return &p->Disks[Index];
+    KeReleaseSpinLock(&g_ProfileLock, oldIrql);
+    return found;
 }
 
-const PHANTOM_NIC_PROFILE* PhantomGetNicProfile(_In_ ULONG Index)
+BOOLEAN PhantomGetNicProfile(_In_ ULONG Index, _Out_ PHANTOM_NIC_PROFILE* Out)
 {
-    PHANTOM_KERNEL_PROFILE* p = g_ActiveProfile;
-    if (!p || Index >= p->NicCount) {
-        return NULL;
+    KIRQL oldIrql;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&g_ProfileLock, &oldIrql);
+    if (g_ActiveProfile && Index < g_ActiveProfile->NicCount) {
+        RtlCopyMemory(Out, &g_ActiveProfile->Nics[Index], sizeof(*Out));
+        found = TRUE;
     }
-    return &p->Nics[Index];
+    KeReleaseSpinLock(&g_ProfileLock, oldIrql);
+    return found;
 }
 
-const PHANTOM_GPU_PROFILE* PhantomGetGpuProfile(_In_ ULONG Index)
+BOOLEAN PhantomGetGpuProfile(_In_ ULONG Index, _Out_ PHANTOM_GPU_PROFILE* Out)
 {
-    PHANTOM_KERNEL_PROFILE* p = g_ActiveProfile;
-    if (!p || Index >= p->GpuCount) {
-        return NULL;
+    KIRQL oldIrql;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&g_ProfileLock, &oldIrql);
+    if (g_ActiveProfile && Index < g_ActiveProfile->GpuCount) {
+        RtlCopyMemory(Out, &g_ActiveProfile->Gpus[Index], sizeof(*Out));
+        found = TRUE;
     }
-    return &p->Gpus[Index];
+    KeReleaseSpinLock(&g_ProfileLock, oldIrql);
+    return found;
 }
 
-const PHANTOM_TPM_PROFILE* PhantomGetTpmProfile(VOID)
+BOOLEAN PhantomGetTpmProfile(_Out_ PHANTOM_TPM_PROFILE* Out)
 {
-    PHANTOM_KERNEL_PROFILE* p = g_ActiveProfile;
-    if (!p || !p->HasTpm) {
-        return NULL;
+    KIRQL oldIrql;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&g_ProfileLock, &oldIrql);
+    if (g_ActiveProfile && g_ActiveProfile->HasTpm) {
+        RtlCopyMemory(Out, &g_ActiveProfile->Tpm, sizeof(*Out));
+        found = TRUE;
     }
-    return &p->Tpm;
+    KeReleaseSpinLock(&g_ProfileLock, oldIrql);
+    return found;
 }
 
-const PHANTOM_DISPLAY_PROFILE* PhantomGetDisplayProfile(_In_ ULONG Index)
+BOOLEAN PhantomGetDisplayProfile(_In_ ULONG Index, _Out_ PHANTOM_DISPLAY_PROFILE* Out)
 {
-    PHANTOM_KERNEL_PROFILE* p = g_ActiveProfile;
-    if (!p || Index >= p->DisplayCount) {
-        return NULL;
+    KIRQL oldIrql;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&g_ProfileLock, &oldIrql);
+    if (g_ActiveProfile && Index < g_ActiveProfile->DisplayCount) {
+        RtlCopyMemory(Out, &g_ActiveProfile->Displays[Index], sizeof(*Out));
+        found = TRUE;
     }
-    return &p->Displays[Index];
+    KeReleaseSpinLock(&g_ProfileLock, oldIrql);
+    return found;
 }

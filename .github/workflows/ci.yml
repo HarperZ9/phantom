@@ -171,5 +171,8 @@ jobs:
       # WDK NuGet packages (packages.config, Directory.Build.props) are for
       # reproducible local builds; they stay inert here because nothing restores
       # them, so Directory.Build.props imports evaluate to false.
+      # SignMode=Off skips the test-signing step: this job verifies that the C
+      # compiles and links, not that it is signed. Real signing is the deferred
+      # Partner Center attestation path (docs/windows-driver-signing.md).
       - name: Build driver (Release x64)
-        run: msbuild phantom-driver\phantom.vcxproj /p:Configuration=Release /p:Platform=x64 /nologo
+        run: msbuild phantom-driver\phantom.vcxproj /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /nologo

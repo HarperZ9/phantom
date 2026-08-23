@@ -1,8 +1,10 @@
 /*
  * profile_store.h — kernel-side storage for the active hardware identity profile.
  *
- * Profile data is received from userland as a packed binary blob via IOCTL,
- * stored in non-paged pool, and accessed lock-free via interlocked pointer swap.
+ * Profile data is received from userland as a packed binary blob via IOCTL and
+ * stored in non-paged pool. Readers copy the fields they need out under a spin
+ * lock, so a reader never holds a pointer into a profile that Set or Clear could
+ * free out from under it.
  */
 
 #pragma once
@@ -81,8 +83,13 @@ NTSTATUS PhantomProfileStoreSet(_In_reads_bytes_(Length) PVOID Buffer, _In_ ULON
 VOID     PhantomProfileStoreClear(VOID);
 BOOLEAN  PhantomProfileIsActive(VOID);
 
-const PHANTOM_DISK_PROFILE*    PhantomGetDiskProfile(_In_ ULONG Index);
-const PHANTOM_NIC_PROFILE*     PhantomGetNicProfile(_In_ ULONG Index);
-const PHANTOM_GPU_PROFILE*     PhantomGetGpuProfile(_In_ ULONG Index);
-const PHANTOM_TPM_PROFILE*     PhantomGetTpmProfile(VOID);
-const PHANTOM_DISPLAY_PROFILE* PhantomGetDisplayProfile(_In_ ULONG Index);
+/*
+ * Copy the requested profile out under the lock. Each returns TRUE and fills
+ * *Out when the profile is present, FALSE otherwise. The caller reads its own
+ * copy, so Set/Clear can free the stored profile safely.
+ */
+_Success_(return != FALSE) BOOLEAN PhantomGetDiskProfile(_In_ ULONG Index, _Out_ PHANTOM_DISK_PROFILE* Out);
+_Success_(return != FALSE) BOOLEAN PhantomGetNicProfile(_In_ ULONG Index, _Out_ PHANTOM_NIC_PROFILE* Out);
+_Success_(return != FALSE) BOOLEAN PhantomGetGpuProfile(_In_ ULONG Index, _Out_ PHANTOM_GPU_PROFILE* Out);
+_Success_(return != FALSE) BOOLEAN PhantomGetTpmProfile(_Out_ PHANTOM_TPM_PROFILE* Out);
+_Success_(return != FALSE) BOOLEAN PhantomGetDisplayProfile(_In_ ULONG Index, _Out_ PHANTOM_DISPLAY_PROFILE* Out);

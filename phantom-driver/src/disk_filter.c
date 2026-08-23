@@ -59,7 +59,8 @@ static NTSTATUS DiskIoctlCompletion(
     PPHANTOM_FILTER_EXT ext = (PPHANTOM_FILTER_EXT)Context;
     PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
     ULONG ioctl = irpSp->Parameters.DeviceIoControl.IoControlCode;
-    const PHANTOM_DISK_PROFILE* profile;
+    PHANTOM_DISK_PROFILE profileCopy;
+    const PHANTOM_DISK_PROFILE* profile = &profileCopy;
     LARGE_INTEGER startTicks;
 
     UNREFERENCED_PARAMETER(DeviceObject);
@@ -68,8 +69,7 @@ static NTSTATUS DiskIoctlCompletion(
         goto done;
     }
 
-    profile = PhantomGetDiskProfile(ext->DeviceIndex);
-    if (!profile) {
+    if (!PhantomGetDiskProfile(ext->DeviceIndex, &profileCopy)) {
         goto done;
     }
 

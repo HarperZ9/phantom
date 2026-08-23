@@ -60,7 +60,8 @@ static NTSTATUS NicIoctlCompletion(
 )
 {
     PPHANTOM_FILTER_EXT ext = (PPHANTOM_FILTER_EXT)Context;
-    const PHANTOM_NIC_PROFILE* profile;
+    PHANTOM_NIC_PROFILE profileCopy;
+    const PHANTOM_NIC_PROFILE* profile = &profileCopy;
     PUCHAR macBuffer;
     ULONG* oidPtr;
     LARGE_INTEGER startTicks;
@@ -71,8 +72,7 @@ static NTSTATUS NicIoctlCompletion(
         goto done;
     }
 
-    profile = PhantomGetNicProfile(ext->DeviceIndex);
-    if (!profile) {
+    if (!PhantomGetNicProfile(ext->DeviceIndex, &profileCopy)) {
         goto done;
     }
 

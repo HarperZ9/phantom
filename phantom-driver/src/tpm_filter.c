@@ -118,7 +118,8 @@ static NTSTATUS TpmIoctlCompletion(
     PVOID Context
 )
 {
-    const PHANTOM_TPM_PROFILE* profile;
+    PHANTOM_TPM_PROFILE profileCopy;
+    const PHANTOM_TPM_PROFILE* profile = &profileCopy;
     PUCHAR responseBuffer;
     ULONG responseLen;
     LARGE_INTEGER startTicks;
@@ -130,8 +131,7 @@ static NTSTATUS TpmIoctlCompletion(
         goto done;
     }
 
-    profile = PhantomGetTpmProfile();
-    if (!profile) {
+    if (!PhantomGetTpmProfile(&profileCopy)) {
         goto done;
     }
 

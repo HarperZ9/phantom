@@ -39,12 +39,13 @@
     <!-- Add/Remove Programs entry metadata. Points at the GitHub repo,
          the one contact surface that definitely exists. ARPPRODUCTICON
          is deferred until a product icon asset lands with the brand pass.
-         ARPNOREPAIR/ARPNOMODIFY keep the entry to a single Uninstall
-         action (there are no repair or feature-modify flows in v1). -->
+         ARPNOREPAIR keeps the entry to a single Uninstall action (there are no
+         repair or feature-modify flows in v1). ARPNOMODIFY is set by the
+         WixUI_Minimal extension itself, so defining it here too is a
+         duplicate-symbol error at link time; leave it to the extension. -->
     <Property Id="ARPHELPLINK" Value="https://github.com/HarperZ9/phantom" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/HarperZ9/phantom" />
     <Property Id="ARPURLUPDATEINFO" Value="https://github.com/HarperZ9/phantom/releases" />
-    <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPNOREPAIR" Value="1" />
 
     <!-- ================================================================ -->

@@ -32,6 +32,16 @@ All notable changes to Phantom are documented here. Format follows
   spoofed at Layer 2, so validate reports them as not-available rather than
   flagging a mismatch.
 
+### Added: Linux apply integration test (CI)
+- **The real apply path runs in CI now.** `scripts/linux-apply-integration.sh`
+  runs `phantom apply`, `validate`, and `revert` for machine-id and hostname as
+  root, isolated in a mount and UTS namespace so the runner's own identity is
+  never touched. It asserts the identifiers change on apply, that `validate`
+  reports consistent, and that revert restores them exactly. A CI job runs it on
+  every push, covering the actual writes, the backup round-trip, and the
+  consistency check that unit tests cannot reach. The MAC path needs a physical
+  NIC and stays for the VM dogfood; a namespace has no physical interfaces.
+
 ### Added: Linux packaging (.deb, .rpm, tarball)
 - **Phantom installs from a package on Linux now.** A single script,
   `packaging/linux/build-packages.sh`, builds a Debian `.deb`, an RPM `.rpm`, and

@@ -44,9 +44,10 @@ memory-safety bug and adds no new kernel API or concurrency.
 
 ## Findings
 
-The Sev-1 use-after-free is now fixed (see below). The control-device ACL remains
-open: it is a coordinated source-plus-build-file change, and it needs the same
-Driver Verifier validation the rest of Layer 1 is waiting on.
+Both are now fixed: the Sev-1 use-after-free and the Sev-2 control-device ACL
+(see below). Both compile and link in the WDK CI build. Both still need Driver
+Verifier validation on a kernel test machine, which is deferred with the rest of
+Layer 1.
 
 ### Use-after-free on the active profile (Sev-1): FIXED
 
@@ -69,20 +70,23 @@ which is now safe. The change compiles clean in the WDK CI build. It still needs
 Driver Verifier validation on a kernel test machine before it is trusted at
 runtime, which is deferred with the rest of Layer 1.
 
-### Control device has no restrictive ACL or caller check (Sev-2, open)
+### Control device has no restrictive ACL or caller check (Sev-2): FIXED
 
-`DriverEntry` creates `\Device\PhantomSpoof` with `IoCreateDevice` and
-`FILE_DEVICE_SECURE_OPEN`, but no explicit security descriptor, and
-`PhantomHandleControlIoctl` performs no caller privilege check. Whether an
-unprivileged process can open the device and send `IOCTL_PHANTOM_SET_PROFILE` /
-`CLEAR_PROFILE` then depends on the default DACL. A driver that rewrites hardware
-identity in the kernel should restrict its control interface to SYSTEM and
-Administrators explicitly.
+`DriverEntry` created `\Device\PhantomSpoof` with `IoCreateDevice` and no explicit
+security descriptor, so whether an unprivileged process could open the device and
+send `IOCTL_PHANTOM_SET_PROFILE` / `CLEAR_PROFILE` depended on the default DACL. A
+driver that rewrites hardware identity in the kernel should not leave that to
+chance.
 
-**Fix design.** Create the control device with `WdmlibIoCreateDeviceSecure`
-(`<wdmsec.h>`, link `wdmsec.lib`) and an SDDL such as
-`SDDL_DEVOBJ_SYS_ALL_ADMIN_ALL`, or set the security in `phantom.inf`. This is a
-coordinated source plus build-file change; it is left for the WDK build.
+**Fixed.** `DriverEntry` now creates the control device with
+`WdmlibIoCreateDeviceSecure` (`<wdmsec.h>`, linking `wdmsec.lib`) and
+`SDDL_DEVOBJ_SYS_ALL_ADMIN_ALL`, which grants `GENERIC_ALL` to SYSTEM and the
+Administrators group and nothing to anyone else. The CLI runs elevated and the
+service runs as LocalSystem, so both still open the device; an unprivileged
+process cannot. The device ACL is the primary defense: it stops an unprivileged
+caller from opening the device at all, so no IOCTL from such a caller ever
+reaches the dispatch. Compiles and links in the WDK CI build; runtime validation
+is deferred with the rest of Layer 1.
 
 ## Completeness gaps (why Layer 1 is not shippable yet)
 

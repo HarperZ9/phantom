@@ -16,6 +16,8 @@
 #include "profile_store.h"
 #include "timing.h"
 
+#include <wdmsec.h>   /* WdmlibIoCreateDeviceSecure + the SDDL macros */
+
 DRIVER_INITIALIZE DriverEntry;
 DRIVER_UNLOAD     PhantomUnload;
 
@@ -34,18 +36,30 @@ NTSTATUS DriverEntry(
     UNICODE_STRING devName = RTL_CONSTANT_STRING(PHANTOM_DEVICE_NAME);
     UNICODE_STRING symLink = RTL_CONSTANT_STRING(PHANTOM_SYMLINK);
 
+    /*
+     * Restrict the control device to SYSTEM and Administrators. This driver
+     * rewrites hardware identity in the kernel, so an unprivileged process must
+     * not be able to open \Device\PhantomSpoof and send SET_PROFILE /
+     * CLEAR_PROFILE. SDDL_DEVOBJ_SYS_ALL_ADMIN_ALL grants GENERIC_ALL to SYSTEM
+     * and the Administrators group and nothing to anyone else; the CLI runs
+     * elevated and the service runs as LocalSystem, so both still open it.
+     */
+    DECLARE_CONST_UNICODE_STRING(controlSddl, SDDL_DEVOBJ_SYS_ALL_ADMIN_ALL);
+
     UNREFERENCED_PARAMETER(RegistryPath);
 
     PhantomProfileStoreInit();
     PhantomTimingInit();
 
-    status = IoCreateDevice(
+    status = WdmlibIoCreateDeviceSecure(
         DriverObject,
         0,
         &devName,
         FILE_DEVICE_UNKNOWN,
         FILE_DEVICE_SECURE_OPEN,
         FALSE,
+        &controlSddl,
+        NULL,
         &g_ControlDevice
     );
     if (!NT_SUCCESS(status)) {

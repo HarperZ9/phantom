@@ -135,3 +135,20 @@ jobs:
           tar_list=$(tar -tzf "$tar")
           grep -q '/install.sh$' <<<"$tar_list"
           echo "package smoke check passed"
+
+  # Run the real apply / validate / revert path as root, isolated in a mount +
+  # UTS namespace so the runner's own identity is never touched. This covers the
+  # machine-id and hostname writes, the backup round-trip, and the consistency
+  # check that unit tests cannot reach. MAC spoofing needs a physical NIC and is
+  # verified in the VM dogfood, not here.
+  linux-apply-integration:
+    name: linux apply (rootful integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build phantom-cli
+        run: cargo build -p phantom-cli
+      - name: Apply, validate, and revert in a namespace
+        run: sudo bash scripts/linux-apply-integration.sh target/debug/phantom-cli

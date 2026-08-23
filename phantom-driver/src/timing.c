@@ -10,6 +10,9 @@
 
 static PHANTOM_TIMING_CTX g_TimingCtx;
 
+/* Defined below but used by PhantomTimingRecordSample above it. */
+static LONGLONG IntegerSqrt(LONGLONG value);
+
 VOID PhantomTimingInit(VOID)
 {
     RtlZeroMemory(&g_TimingCtx, sizeof(g_TimingCtx));

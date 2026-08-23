@@ -61,8 +61,8 @@ static NTSTATUS GpuPnpQueryIdCompletion(
 )
 {
     PPHANTOM_FILTER_EXT ext = (PPHANTOM_FILTER_EXT)Context;
-    PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
-    const PHANTOM_GPU_PROFILE* profile;
+    PHANTOM_GPU_PROFILE profileCopy;
+    const PHANTOM_GPU_PROFILE* profile = &profileCopy;
     PWCHAR originalId;
     PWCHAR newId;
     ULONG newIdBytes;
@@ -73,8 +73,7 @@ static NTSTATUS GpuPnpQueryIdCompletion(
         goto done;
     }
 
-    profile = PhantomGetGpuProfile(ext->DeviceIndex);
-    if (!profile || profile->PnpInstanceIdLength == 0) {
+    if (!PhantomGetGpuProfile(ext->DeviceIndex, &profileCopy) || profile->PnpInstanceIdLength == 0) {
         goto done;
     }
 

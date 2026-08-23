@@ -17,6 +17,7 @@
 
 #include "phantom.h"
 #include "profile_store.h"
+#include "timing.h"
 
 /* EDID byte offsets */
 #define EDID_MANUFACTURER_OFFSET    8
@@ -100,7 +101,8 @@ static NTSTATUS EdidIoctlCompletion(
 )
 {
     PPHANTOM_FILTER_EXT ext = (PPHANTOM_FILTER_EXT)Context;
-    const PHANTOM_DISPLAY_PROFILE* profile;
+    PHANTOM_DISPLAY_PROFILE profileCopy;
+    const PHANTOM_DISPLAY_PROFILE* profile = &profileCopy;
     PUCHAR buffer;
     ULONG bufferLen;
     LARGE_INTEGER startTicks;
@@ -111,8 +113,7 @@ static NTSTATUS EdidIoctlCompletion(
         goto done;
     }
 
-    profile = PhantomGetDisplayProfile(ext->DeviceIndex);
-    if (!profile) {
+    if (!PhantomGetDisplayProfile(ext->DeviceIndex, &profileCopy)) {
         goto done;
     }
 

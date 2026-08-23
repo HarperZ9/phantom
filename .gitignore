@@ -17,3 +17,6 @@ endpoints/node_modules
 endpoints/.wrangler
 endpoints/.dev.vars
 endpoints/package-lock.json
+
+# WDK NuGet packages (restored, not committed)
+phantom-driver/packages/

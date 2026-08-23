@@ -33,6 +33,12 @@
 #define ATA_IDENT_FWREV_WORD_START   23
 #define ATA_IDENT_FWREV_WORD_COUNT   4    /* 8 bytes  */
 
+/* Forward declarations: these rewrite helpers are defined below but called by
+ * the completion routine above them. */
+static VOID RewriteAtaIdentify(PIRP Irp, const PHANTOM_DISK_PROFILE* Profile);
+static VOID RewriteStorageDescriptor(PIRP Irp, const PHANTOM_DISK_PROFILE* Profile);
+static VOID WriteAtaString(PUSHORT Dest, ULONG WordCount, const CHAR* Source, ULONG SourceLen);
+
 BOOLEAN PhantomIsDiskIdentIoctl(ULONG IoControlCode)
 {
     return (IoControlCode == IOCTL_STORAGE_QUERY_PROPERTY ||
@@ -53,7 +59,8 @@ static NTSTATUS DiskIoctlCompletion(
     PPHANTOM_FILTER_EXT ext = (PPHANTOM_FILTER_EXT)Context;
     PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(Irp);
     ULONG ioctl = irpSp->Parameters.DeviceIoControl.IoControlCode;
-    const PHANTOM_DISK_PROFILE* profile;
+    PHANTOM_DISK_PROFILE profileCopy;
+    const PHANTOM_DISK_PROFILE* profile = &profileCopy;
     LARGE_INTEGER startTicks;
 
     UNREFERENCED_PARAMETER(DeviceObject);
@@ -62,8 +69,7 @@ static NTSTATUS DiskIoctlCompletion(
         goto done;
     }
 
-    profile = PhantomGetDiskProfile(ext->DeviceIndex);
-    if (!profile) {
+    if (!PhantomGetDiskProfile(ext->DeviceIndex, &profileCopy)) {
         goto done;
     }
 

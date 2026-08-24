@@ -3,10 +3,14 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(
     name = "phantom",
-    about = "Hardware identity privacy tool",
+    about = "Hardware identity privacy tool for machines you own or are authorized to test",
     long_about = "Phantom generates realistic, internally-consistent hardware identity profiles \
                   and applies them across multiple system layers, giving users control over \
-                  what their machine reports to software.",
+                  what their machine reports to software.\n\n\
+                  For use on machines you own or are expressly authorized to test. \
+                  Not for evading fraud controls, circumventing lawful court orders, \
+                  or misrepresenting a device you do not control. \
+                  Run `phantom tou` for the full Terms of Use.",
     version
 )]
 pub struct Cli {

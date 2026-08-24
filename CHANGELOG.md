@@ -311,12 +311,18 @@ across Sprints 12–21 (see prior entries).
 
 ## [Unreleased pre-v1.0]
 
+Sprints 12 through 19 below document Phantom's own license-enforcement
+hardening. All of this engineering is directed inward at protecting the
+vendor's licensing system from piracy and key extraction. None of it acts
+on third-party software or the host system outside Phantom's own data
+directory.
+
 ### Added
 - Adversarial license-key fuzz test: every single-bit flip of a valid key
   is confirmed to fail HMAC verification (480 cases per run)
 - Truncated-key and noisy-input license validation coverage
 
-### Changed — Sprint 12: anti-reversal hardening
+### Changed — Sprint 12: anti-reversal hardening (license key protection)
 - **Master signing key is now XOR-obfuscated at build time.** `build.rs`
   scrambles the seed into per-byte-position XOR bytes and emits only the
   obfuscated array. The runtime `keys::master_key()` unscrambles into a
@@ -412,7 +418,7 @@ across Sprints 12–21 (see prior entries).
   operators can confirm the master-key generation their binary was
   built against without exposing key material.
 
-### Changed — Sprint 16: detector ensemble + process hardening
+### Changed — Sprint 16: detector ensemble + process hardening (license anti-piracy)
 - **Anti-debugger detection is an ensemble now.** `full_self_check()`
   returns a `DetectionVerdict { all_clear, triggered }` listing every
   detector that fired. Patching out one detector no longer disables
@@ -492,7 +498,7 @@ across Sprints 12–21 (see prior entries).
   fingerprint / MAC / license-key scrubbing, short dashed UUID not
   matched, multi-secret line, panic-hook idempotency.
 
-### Changed — Sprint 19: tripwire + honey license keys
+### Changed — Sprint 19: tripwire + honey license keys (license anti-piracy)
 - **Anti-tamper tripwire log** at `<data_dir>/.tripwire`. Every entry
   is HMAC-signed under STATE_PURPOSE — an attacker cannot silently
   trim or edit the log without failing MAC verification. Two

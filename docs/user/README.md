@@ -1,5 +1,9 @@
 # Phantom user guide
 
+Phantom is a hardware identity privacy tool for machines you own or are
+expressly authorized to test. It is not for evading fraud controls or
+misrepresenting a device you do not control.
+
 Start here. These pages walk from install to first profile to the
 details.
 

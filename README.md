@@ -8,6 +8,18 @@ Phantom audits what your machine reveals, generates internally consistent identi
 
 Phantom is for machines you own or are expressly authorized to test. It is not a tool for evading fraud controls or misrepresenting a device you do not control.
 
+## Who this is for
+
+Phantom serves operators who need to control what their hardware reports to software running on it. Concrete use cases:
+
+- **Penetration testers and red teams** who rotate hardware identity between assessments so residual fingerprints from one engagement do not contaminate the next.
+- **QA and device-testing teams** who need to validate software behavior across a range of hardware profiles without maintaining a physical device lab.
+- **Privacy researchers** studying how applications fingerprint and track devices, and what identifiers carry the most weight.
+- **Enterprise IT and fleet management** teams provisioning standardized device identities across imaging pipelines.
+- **Forensic and incident-response analysts** who build isolated examination environments and need to control which identifiers the examined software sees.
+
+Phantom is a privacy and authorized-testing tool. It does not target anti-cheat systems, game services, or fraud-detection infrastructure. Its Terms of Use prohibit financial fraud, evasion of lawful court orders, and criminal activity in any jurisdiction.
+
 ## What v1.1.0 does
 
 - **Audit.** Read and report every hardware identifier software can see on this machine. Nothing is modified.

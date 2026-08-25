@@ -4,7 +4,12 @@ Phantom reads the hardware identifiers software uses to fingerprint your
 machine, generates realistic replacement identities, and applies them where it
 can reverse the change cleanly.
 
-Phantom is for machines you own or are authorized to test.
+Phantom is for machines you own or are authorized to test. It serves
+penetration testers rotating identity between assessments, QA teams validating
+software across hardware profiles, privacy researchers studying device
+fingerprinting, and enterprise IT teams provisioning standardized identities. It
+does not target anti-cheat systems, game services, or fraud-detection
+infrastructure.
 
 ## Prerequisites
 

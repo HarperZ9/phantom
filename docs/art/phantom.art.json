@@ -1,0 +1,87 @@
+{
+  "header": {
+    "name": "phantom",
+    "role": "hardware identity privacy, with a restore path",
+    "tagline": "Read what your machine reveals, change it, and restore it exactly.",
+    "words": ["audit", "seed", "apply", "revert", "match"]
+  },
+  "flows": [
+    {
+      "file": "apply-lane.svg",
+      "kicker": "one seed, one machine, one way back",
+      "title": "How an identity is generated, written, and taken off again",
+      "footnote": "The order is the safety property. The backup lands on disk before the first value changes, so a crash between the two still leaves a machine that can be put back. A backup that will not save stops the apply instead of proceeding without one.",
+      "alt": "Eight stages of applying a hardware identity: audit, generate, consistent, capture, backup, write, validate, and revert. The audit reads seven identifier sources and writes nothing. Generate hashes one seed string with SHA-256 and uses the result to key a ChaCha20 stream, so the same seed rebuilds the same identity on any machine. The generated values stay internally consistent: a Samsung disk serial carries Samsung's format, and an Intel network adapter takes one of the registered Intel prefixes. Capture reads each live registry value together with the type it is stored under, because a string written where a number belongs corrupts the value. The backup is saved to disk before a single write happens. Then the identifiers are written: five registry values on Windows, three on Linux. Validate re-reads every source and compares it field by field. Revert restores each original at the type it was recorded under. Three outcomes: originals kept, nothing written, and modeled only.",
+      "stages": [
+        {"title": "Audit", "note": "Seven sources read, and nothing written."},
+        {"title": "Generate", "note": "One seed hashed into a stream cipher."},
+        {"title": "Consistent", "note": "Samsung serials in Samsung's format."},
+        {"title": "Capture", "note": "Each live value read with its type."},
+        {"title": "Backup", "note": "Saved to disk before a single write."},
+        {"title": "Write", "note": "Five values on Windows, three on Linux."},
+        {"title": "Validate", "note": "Every source re-read and compared."},
+        {"title": "Revert", "note": "Each original restored at its own type."}
+      ],
+      "returns": [
+        {"from": 2, "to": 0, "label": "ONE SEED REBUILDS THE SAME IDENTITY"},
+        {"from": 6, "to": 4, "label": "A SECOND APPLY KEEPS THE FIRST BACKUP"}
+      ],
+      "outcomes": [
+        {"label": "ORIGINALS KEPT", "note": "the backup lands before the first write", "tone": "verified"},
+        {"label": "NOTHING WRITTEN", "note": "a backup that will not save stops apply", "tone": "drift"},
+        {"label": "MODELED ONLY", "note": "firmware and kernel values stay unset", "tone": "none"}
+      ]
+    },
+    {
+      "file": "validate-lane.svg",
+      "kicker": "seven readers, none of them trusting another",
+      "title": "How the machine is asked whether the identity actually took",
+      "footnote": "No source vouches for another. A value that agrees with the profile in the registry and nowhere else is a mismatch rather than a pass, and a source that cannot be read at all is reported as unavailable instead of being counted either way.",
+      "alt": "Eight stages of validating an applied identity: sources, firmware, registry, devices, expect, compare, status, and report. Seven readers run, each one independent of the others. The firmware reader parses the SMBIOS table out of its raw bytes rather than asking an operating system service for a summary. The registry reader reads back the five Layer 2 values. The device readers enumerate disks, network adapters, GPUs, displays, and the TPM. Against each reading stands the profile field that identifier is supposed to carry. The two are compared, and each field lands on match, mismatch, or unavailable. The result is a diff a person can read, or the same content in the stable JSON envelope. Three outcomes: match, mismatch, and unavailable.",
+      "stages": [
+        {"title": "Sources", "note": "Seven readers, each one independent."},
+        {"title": "Firmware", "note": "The SMBIOS table parsed from raw bytes."},
+        {"title": "Registry", "note": "The five Layer 2 values read back."},
+        {"title": "Devices", "note": "Disks, network, GPU, display and TPM."},
+        {"title": "Expect", "note": "The profile field for each identifier."},
+        {"title": "Compare", "note": "The live value against the wanted one."},
+        {"title": "Status", "note": "Match, mismatch, or unavailable, per field."},
+        {"title": "Report", "note": "A readable diff, or the JSON envelope."}
+      ],
+      "returns": [
+        {"from": 2, "to": 0, "label": "NO SOURCE VOUCHES FOR ANOTHER"},
+        {"from": 6, "to": 4, "label": "AN UNREADABLE SOURCE IS NOT A MATCH"}
+      ],
+      "outcomes": [
+        {"label": "MATCH", "note": "every source reports the profile value", "tone": "verified"},
+        {"label": "MISMATCH", "note": "a source still reports the original", "tone": "drift"},
+        {"label": "UNAVAILABLE", "note": "the source could not be read at all", "tone": "none"}
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "file": "identity-table.svg",
+      "kicker": "what a profile holds",
+      "title": "One seed, seven sources, and the parts that stay modeled",
+      "source": "phantom-cli/src/profile/vendor_db.rs and apply/registry.rs",
+      "heads": ["what it holds", "how many", "where the shape comes from"],
+      "fields": [
+        {"key": "the seed", "value": "one string", "note": "Hashed with SHA-256 into a ChaCha20 stream, so the same seed rebuilds the same identity on any machine, every time."},
+        {"key": "board vendors", "value": "four of them", "note": "ASUSTeK, Gigabyte, Micro-Star and ASRock, each with its own serial prefix, length, character set and BIOS vendor string."},
+        {"key": "disk vendors", "value": "four of them", "note": "Samsung, Western Digital, Seagate and Crucial, so a generated serial carries the format that vendor really uses."},
+        {"key": "network vendors", "value": "four, real OUIs", "note": "Intel, Realtek, Broadcom and Qualcomm, drawn from eighteen registered prefixes rather than random leading bytes."},
+        {"key": "GPU models", "value": "fourteen of them", "note": "Eight NVIDIA and six AMD, each paired with the real PCI device id it carries under the vendor id that owns it."},
+        {"key": "TPM vendors", "value": "four of them", "note": "Infineon, STMicroelectronics, Nuvoton and Intel PTT, carrying the manufacturer id a real module reports."},
+        {"key": "display vendors", "value": "seven of them", "note": "Dell, LG, Samsung, ASUS, Acer, BenQ and HP, under the three letter EDID codes the standard assigns them."},
+        {"key": "applied on Windows", "value": "five registry values", "note": "MachineGuid, HwProfileGuid, MachineId, ProductId and InstallDate. Four strings and one number, each restored at its own type."},
+        {"key": "applied on Linux", "value": "three identifiers", "note": "The machine id, the hostname, and the MAC of each physical interface. A reboot drops the MAC, so the service sets it again."},
+        {"key": "the computer name", "value": "modeled, not applied", "tone": "drift", "note": "Writing it at the registry level alone desyncs the machine name and breaks shutdown and WMI, so it waits for a full rename path."},
+        {"key": "the backup", "value": "written first", "note": "Saved before any value changes, and a second apply keeps the first one, so revert restores the machine and not an earlier spoof."},
+        {"key": "profiles per tier", "value": "two, fifty, unlimited", "note": "Free covers Layer 2 and two profiles. Pro and Enterprise raise the limit and take the deferred layers as those ship."}
+      ],
+      "alt": "Twelve rows covering what a generated profile holds and where each part gets its shape. The seed is one string, hashed with SHA-256 into a ChaCha20 stream, so the same seed rebuilds the same identity on any machine. Four board vendors, ASUSTeK, Gigabyte, Micro-Star and ASRock, each carrying its own serial prefix, length, character set and BIOS vendor string. Four disk vendors, Samsung, Western Digital, Seagate and Crucial. Four network vendors, Intel, Realtek, Broadcom and Qualcomm, drawn from eighteen registered OUI prefixes rather than random leading bytes. Fourteen GPU models, eight NVIDIA and six AMD, each with the real PCI device id it carries. Four TPM vendors and seven display vendors under the three letter EDID codes the standard assigns. On Windows five registry values are applied: MachineGuid, HwProfileGuid, MachineId, ProductId and InstallDate, four strings and one number. On Linux three identifiers are applied: machine id, hostname, and the MAC of each physical interface. The accented row is the computer name, which is modeled and deliberately not applied, because writing it at the registry level alone desyncs the machine name and breaks shutdown and WMI. The backup is written before any value changes, and a second apply keeps the first one. Profile limits run two, fifty, and unlimited across the three tiers.",
+      "footnote": "Everything named in the two applied rows is written and restorable today. Everything else a profile carries, the board and disk serials, the GPU and TPM and display identity, is modeled so the profile stays internally consistent as the deferred layers land."
+    }
+  ]
+}

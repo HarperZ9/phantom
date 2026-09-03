@@ -445,4 +445,24 @@ mod tests {
             vec![("eth0".to_string(), "aa:bb:cc:dd:ee:01".to_string())]
         );
     }
+
+    /// The count the artwork draws. Linux applies three identifiers, and every
+    /// one of them goes through its own derivation instead of being written
+    /// straight out of the profile: the machine id, the hostname, and the MAC
+    /// of each physical interface.
+    #[test]
+    fn three_identifiers_are_applied_on_linux() {
+        let profile = crate::profile::engine::generate_profile("linux-seed", "linux");
+        assert!(derive_machine_id(&profile.os.machine_guid).is_some());
+        assert!(derive_hostname(&profile.os.computer_name).is_some());
+        let macs: Vec<String> = profile
+            .network_adapters
+            .iter()
+            .map(|a| a.permanent_mac.clone())
+            .collect();
+        assert!(normalize_mac(&macs[0]).is_some());
+        let planned = plan_mac_assignments(&["eth0".to_string()], &macs);
+        assert_eq!(planned.len(), 1);
+        assert_eq!(planned[0].0, "eth0");
+    }
 }

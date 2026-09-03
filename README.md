@@ -1,5 +1,9 @@
 # Phantom
 
+<p align="center">
+  <img src="docs/art/phantom-header.svg" alt="Phantom" width="100%">
+</p>
+
 Hardware identity privacy for authorized Windows and Linux systems.
 
 Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, the Windows registry machine GUID, the Linux machine ID. Software uses these to fingerprint your device, track it across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
@@ -19,6 +23,8 @@ Phantom serves operators who need to control what their hardware reports to soft
 - **Forensic and incident-response analysts** who build isolated examination environments and need to control which identifiers the examined software sees.
 
 Phantom is a privacy and authorized-testing tool. It does not target anti-cheat systems, game services, or fraud-detection infrastructure. Its Terms of Use prohibit financial fraud, evasion of lawful court orders, and criminal activity in any jurisdiction.
+
+![Eight stages of applying a hardware identity: audit, generate, consistent, capture, backup, write, validate, and revert. The audit reads seven identifier sources and writes nothing. Generate hashes one seed string with SHA-256 and uses the result to key a ChaCha20 stream, so the same seed rebuilds the same identity on any machine. The generated values stay internally consistent: a Samsung disk serial carries Samsung's format, and an Intel network adapter takes one of the registered Intel prefixes. Capture reads each live registry value together with the type it is stored under, because a string written where a number belongs corrupts the value. The backup is saved to disk before a single write happens. Then the identifiers are written: five registry values on Windows, three on Linux. Validate re-reads every source and compares it field by field. Revert restores each original at the type it was recorded under. Three outcomes: originals kept, nothing written, and modeled only.](docs/art/apply-lane.svg)
 
 ## What v1.1.0 does
 
@@ -101,6 +107,8 @@ phantom license activate <key>   # activate the key they issue back
 ```
 
 Activation shows the Terms of Use and Privacy Notice. Answer `y` at each prompt (or pass `--accept-tou --acknowledge-privacy-notice` for unattended installs).
+
+![Twelve rows covering what a generated profile holds and where each part gets its shape. The seed is one string, hashed with SHA-256 into a ChaCha20 stream, so the same seed rebuilds the same identity on any machine. Four board vendors, ASUSTeK, Gigabyte, Micro-Star and ASRock, each carrying its own serial prefix, length, character set and BIOS vendor string. Four disk vendors, Samsung, Western Digital, Seagate and Crucial. Four network vendors, Intel, Realtek, Broadcom and Qualcomm, drawn from eighteen registered OUI prefixes rather than random leading bytes. Fourteen GPU models, eight NVIDIA and six AMD, each with the real PCI device id it carries. Four TPM vendors and seven display vendors under the three letter EDID codes the standard assigns. On Windows five registry values are applied: MachineGuid, HwProfileGuid, MachineId, ProductId and InstallDate, four strings and one number. On Linux three identifiers are applied: machine id, hostname, and the MAC of each physical interface. The accented row is the computer name, which is modeled and deliberately not applied, because writing it at the registry level alone desyncs the machine name and breaks shutdown and WMI. The backup is written before any value changes, and a second apply keeps the first one. Profile limits run two, fifty, and unlimited across the three tiers.](docs/art/identity-table.svg)
 
 ## What apply changes
 
@@ -217,6 +225,8 @@ sudo ./uninstall.sh
 - **Windows** 10 22H2 or Windows 11 23H2 or newer; Administrator privileges for install, apply, and revert.
 - **Linux** with systemd; root for apply and revert; `iproute2` for MAC spoofing.
 - x86-64.
+
+![Eight stages of validating an applied identity: sources, firmware, registry, devices, expect, compare, status, and report. Seven readers run, each one independent of the others. The firmware reader parses the SMBIOS table out of its raw bytes rather than asking an operating system service for a summary. The registry reader reads back the five Layer 2 values. The device readers enumerate disks, network adapters, GPUs, displays, and the TPM. Against each reading stands the profile field that identifier is supposed to carry. The two are compared, and each field lands on match, mismatch, or unavailable. The result is a diff a person can read, or the same content in the stable JSON envelope. Three outcomes: match, mismatch, and unavailable.](docs/art/validate-lane.svg)
 
 ## Scope
 

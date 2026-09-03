@@ -20,6 +20,23 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
+  # The README drawings are rendered from docs/art/phantom.art.json, so they rot
+  # like any other derived file: a rule moves, nobody re-renders, and the picture
+  # describes something that stopped being true. This re-renders every drawing,
+  # compares the result against what is committed, and checks that each one fits
+  # the columns it is drawn in.
+  # Whether a drawing is TRUE of the code is a separate question, answered by
+  # phantom-cli/tests/repo_art.rs in the test job.
+  repo-art:
+    name: repo art
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/check_repo_art.py
+
   clippy:
     name: clippy
     runs-on: ubuntu-latest

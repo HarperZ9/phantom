@@ -374,6 +374,19 @@ mod tests {
         }
     }
 
+    /// The count the artwork draws. Windows applies five values: the four
+    /// REG_SZ targets in this table plus the one REG_DWORD InstallDate pushed
+    /// beside them. A sixth target added here without redrawing would leave the
+    /// README claiming five while the code writes six.
+    #[test]
+    fn five_values_are_applied_on_windows() {
+        assert_eq!(
+            STRING_TARGETS.len(),
+            4,
+            "four strings plus InstallDate is the drawn five"
+        );
+    }
+
     /// The registry backup must live in the SAME machine-wide store as
     /// everything else. If it drifts to a per-user base again, the
     /// LocalSystem uninstall cleanup can't read it and the original

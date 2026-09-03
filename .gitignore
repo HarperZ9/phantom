@@ -20,3 +20,7 @@ endpoints/package-lock.json
 
 # WDK NuGet packages (restored, not committed)
 phantom-driver/packages/
+
+# Byte cache from the art tools under tools/.
+__pycache__/
+*.pyc

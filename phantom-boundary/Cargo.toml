@@ -14,7 +14,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-thiserror = "1"
+thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tower-http = { version = "0.6", features = ["timeout"] }
 url = "2"

@@ -18,15 +18,19 @@ fn main() {
     // grep for the master key" attack. No-op on Windows for now.
     phantom_license::integrity::harden_process();
 
+    let cli = Cli::parse();
+
     // Opportunistic license phone-home. Fires only when the operator
     // has acknowledged the Privacy Notice AND phone_home_enabled is
     // not explicitly false AND phone_home_url is set AND the interval
-    // has elapsed since the last call. Runs concurrently with the
-    // command so the user's output is never blocked on the network; we
-    // join it just before exit so the call actually lands.
-    let phone_home_handle = maybe_spawn_phone_home();
-
-    let cli = Cli::parse();
+    // has elapsed since the last call. Boundary commands are parsed
+    // first and skipped here because their whole purpose is local
+    // disclosure control.
+    let phone_home_handle = if cli.command.allows_phone_home() {
+        maybe_spawn_phone_home()
+    } else {
+        None
+    };
 
     match cli.command {
         Commands::Audit => commands::audit::run(),
@@ -46,6 +50,8 @@ fn main() {
         Commands::Service { action } => commands::service::run(action),
 
         Commands::Config { action } => commands::config::run(action, cli.json),
+
+        Commands::Boundary { action } => commands::boundary::run(action, cli.json),
 
         Commands::Version => commands::meta::version(cli.json),
 

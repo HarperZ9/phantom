@@ -17,6 +17,11 @@ rand_chacha = "0.3"
 thiserror = "1"
 phantom-ipc = { path = "../phantom-ipc" }
 phantom-license = { path = "../phantom-license" }
+phantom-boundary = { path = "../phantom-boundary" }
+tokio = { version = "1", features = ["rt-multi-thread", "signal"] }
+
+[dev-dependencies]
+tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

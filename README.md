@@ -172,6 +172,12 @@ phantom config show
 phantom config path
 phantom config set <key> <value>
 
+# Boundary gateway (local model disclosure control)
+phantom boundary content-id --session <id> --content request.json
+phantom boundary seal --policy policy.unsigned.json --out policy.sealed.json
+phantom --json boundary check --policy policy.sealed.json --session <id> --content request.json
+phantom boundary serve --policy policy.sealed.json --listen 127.0.0.1:43117
+
 # Legal + integrity
 phantom privacy-notice
 phantom tou
@@ -197,6 +203,8 @@ Phantom resolves configuration in this order (highest wins): environment variabl
 ## Privacy and phone-home
 
 Phantom does not phone home unless you set a callback URL. When you do, it sends a minimal, signed payload (an opaque license serial, the tier, the Phantom version, a timestamp, and tripwire counts) at most once per interval, over `curl` so the call is visible to your host tooling. No hardware fingerprint, profile content, or machine identity leaves the machine. Disable it any time with `phantom config set phone_home_enabled false`. See [docs/user/privacy.md](docs/user/privacy.md) and `phantom privacy-notice`.
+
+`phantom boundary` is a separate opt-in local gateway for model clients you configure to use it. The first release supports exact-body approvals for non-streaming `POST /v1/chat/completions` to one numeric loopback upstream and records content-free receipts for one sealed policy session per gateway. It is a first-hop local control, not a promise about provider retention, legal ownership, arbitrary client containment, or the chosen upstream's internal side channels. Post-dispatch upstream errors are transport results, not proof that the upstream did not receive the approved body. See [docs/boundary-gateway.md](docs/boundary-gateway.md).
 
 ## Uninstall
 

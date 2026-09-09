@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use std::net::SocketAddr;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -73,6 +75,12 @@ pub enum Commands {
         action: ConfigAction,
     },
 
+    /// Control local model-disclosure boundary policies and gateway
+    Boundary {
+        #[command(subcommand)]
+        action: BoundaryAction,
+    },
+
     /// Print detailed version and build information
     Version,
 
@@ -95,6 +103,12 @@ pub enum Commands {
     /// Show the Phantom Terms of Use and this install's acceptance
     /// status.
     Tou,
+}
+
+impl Commands {
+    pub fn allows_phone_home(&self) -> bool {
+        !matches!(self, Commands::Boundary { .. })
+    }
 }
 
 #[derive(Subcommand)]
@@ -220,5 +234,72 @@ pub enum ConfigAction {
         key: String,
         /// Value to store
         value: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum BoundaryAction {
+    /// Compute a session-bound keyed content id for a request body
+    ContentId {
+        /// Boundary session id the approval belongs to
+        #[arg(long)]
+        session: String,
+        /// Request body file, or '-' for stdin
+        #[arg(long)]
+        content: PathBuf,
+        /// Environment variable containing the operator policy HMAC key
+        #[arg(long, default_value = "PHANTOM_BOUNDARY_POLICY_KEY")]
+        key_env: String,
+    },
+
+    /// Seal an operator-authored boundary policy with a local HMAC key
+    Seal {
+        /// Policy JSON with policy_mac empty or absent
+        #[arg(long)]
+        policy: PathBuf,
+        /// Output path for the sealed policy. Prints to stdout when omitted.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Environment variable containing the operator policy HMAC key
+        #[arg(long, default_value = "PHANTOM_BOUNDARY_POLICY_KEY")]
+        key_env: String,
+    },
+
+    /// Check one request body against a sealed operator policy
+    Check {
+        /// Sealed policy JSON
+        #[arg(long)]
+        policy: PathBuf,
+        /// Boundary session id for this request
+        #[arg(long)]
+        session: String,
+        /// Request body file, or '-' for stdin
+        #[arg(long)]
+        content: PathBuf,
+        /// Operation label to check
+        #[arg(long, default_value = "chat.completions.create")]
+        operation: String,
+        /// Environment variable containing the operator policy HMAC key
+        #[arg(long, default_value = "PHANTOM_BOUNDARY_POLICY_KEY")]
+        key_env: String,
+    },
+
+    /// Serve the local loopback gateway for POST /v1/chat/completions
+    Serve {
+        /// Sealed policy JSON
+        #[arg(long)]
+        policy: PathBuf,
+        /// Numeric loopback address and port to bind, for example 127.0.0.1:43117
+        #[arg(long)]
+        listen: SocketAddr,
+        /// Receipt JSONL path. Defaults to <data_dir>/logs/boundary-receipts.jsonl.
+        #[arg(long)]
+        receipt_log: Option<PathBuf>,
+        /// Environment variable containing the operator policy HMAC key
+        #[arg(long, default_value = "PHANTOM_BOUNDARY_POLICY_KEY")]
+        key_env: String,
+        /// Environment variable containing the gateway bearer token
+        #[arg(long, default_value = "PHANTOM_BOUNDARY_AUTH")]
+        auth_token_env: String,
     },
 }

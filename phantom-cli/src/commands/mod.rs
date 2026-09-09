@@ -1,5 +1,6 @@
 pub mod apply;
 pub mod audit;
+pub mod boundary;
 pub mod config;
 pub mod license;
 pub mod meta;

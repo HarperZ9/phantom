@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "phantom-cli",
+    "phantom-boundary",
     "phantom-ipc",
     "phantom-license",
     "phantom-svc",

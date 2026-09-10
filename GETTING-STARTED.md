@@ -25,12 +25,12 @@ No internet connection is required.
 
 ### Windows MSI
 
-Download `PhantomSetup-v1.1.0.msi` and `SHA256SUMS.txt` from
+Download `PhantomSetup-v1.1.1.msi` and `SHA256SUMS.txt` from
 [Releases](https://github.com/HarperZ9/phantom/releases/latest). Verify the
 hash before running:
 
 ```
-certutil -hashfile PhantomSetup-v1.1.0.msi SHA256
+certutil -hashfile PhantomSetup-v1.1.1.msi SHA256
 ```
 
 Compare the output against `SHA256SUMS.txt`. Double-click the MSI. The installer
@@ -44,14 +44,14 @@ the terminal and open a new one (PATH changes take effect in new sessions only).
 
 ```sh
 # Debian / Ubuntu
-sudo apt-get install ./phantom_1.1.0-1_amd64.deb
+sudo apt-get install ./phantom_1.1.1-1_amd64.deb
 
 # Fedora / RHEL
-sudo dnf install ./phantom-1.1.0-1.x86_64.rpm
+sudo dnf install ./phantom-1.1.1-1.x86_64.rpm
 
 # Portable tarball (any distro)
-tar -xzf phantom-1.1.0-x86_64-linux.tar.gz
-cd phantom-1.1.0-x86_64-linux
+tar -xzf phantom-1.1.1-x86_64-linux.tar.gz
+cd phantom-1.1.1-x86_64-linux
 sudo ./install.sh
 ```
 
@@ -175,7 +175,7 @@ reboot after apply is recommended: some services cache identifiers at startup.
 ```
 
 The 5 matching entries are the Layer-2 identifiers. The 33 unavailable entries
-need Layer 1 or Layer 0 to spoof. Expected on v1.1.0. A mismatch means a value
+need Layer 1 or Layer 0 to spoof. Expected on v1.1.1. A mismatch means a value
 did not stick; check that you ran apply with elevation.
 
 ## Step 5: Revert
@@ -214,7 +214,7 @@ applies the full Layer-2 identity set and stores two profiles.
 
   Machine Fingerprint: 9f3a...c7e2
   Requested Tier:      pro
-  Phantom Version:     1.1.0
+  Phantom Version:     1.1.1
   Current Tier:        free
 
   Send this block to your Phantom licensing contact.
@@ -254,7 +254,7 @@ issued for one device does nothing on another.
 
 ## Caveats
 
-**Layer 2 only.** Phantom v1.1.0 spoofs userland identifiers: registry keys on
+**Layer 2 only.** Phantom v1.1.1 spoofs userland identifiers: registry keys on
 Windows, machine-id/hostname/MAC on Linux. Applications that read raw device
 serials through kernel APIs see the real hardware. Layer 1 (kernel driver) is
 compiled and partially reviewed, but unsigned and not functional end to end.

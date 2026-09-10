@@ -6,6 +6,12 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-10
+
+### Changed
+- Cut a patch release from current main after the boundary gateway, documentation, and `thiserror` 2.0.20 dependency update.
+- Keep the shipped binaries, installer defaults, and public download instructions aligned with the `v1.1.1` release tag.
+
 ## [1.1.0] - 2026-08-23
 
 **Cross-platform release.** Phantom now runs on Linux as well as Windows. It

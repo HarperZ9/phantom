@@ -26,7 +26,7 @@ Phantom is a privacy and authorized-testing tool. It does not target anti-cheat 
 
 ![Eight stages of applying a hardware identity: audit, generate, consistent, capture, backup, write, validate, and revert. The audit reads seven identifier sources and writes nothing. Generate hashes one seed string with SHA-256 and uses the result to key a ChaCha20 stream, so the same seed rebuilds the same identity on any machine. The generated values stay internally consistent: a Samsung disk serial carries Samsung's format, and an Intel network adapter takes one of the registered Intel prefixes. Capture reads each live registry value together with the type it is stored under, because a string written where a number belongs corrupts the value. The backup is saved to disk before a single write happens. Then the identifiers are written: five registry values on Windows, three on Linux. Validate re-reads every source and compares it field by field. Revert restores each original at the type it was recorded under. Three outcomes: originals kept, nothing written, and modeled only.](docs/art/apply-lane.svg)
 
-## What v1.1.0 does
+## What v1.1.1 does
 
 - **Audit.** Read and report every hardware identifier software can see on this machine. Nothing is modified.
 - **Generate.** Build a realistic, internally consistent identity profile from a seed. Samsung disk serials match Samsung's format; Intel MACs use real Intel OUI prefixes. One seed reproduces the same identity every time.
@@ -40,10 +40,10 @@ Layer 1 (kernel driver) and Layer 0 (UEFI/DXE firmware) are modeled but not ship
 
 ### 1. Download and verify
 
-Download `PhantomSetup-v1.1.0.msi` from [Releases](https://github.com/HarperZ9/phantom/releases), along with `SHA256SUMS.txt`. Verify it before running:
+Download `PhantomSetup-v1.1.1.msi` from [Releases](https://github.com/HarperZ9/phantom/releases), along with `SHA256SUMS.txt`. Verify it before running:
 
 ```
-certutil -hashfile PhantomSetup-v1.1.0.msi SHA256
+certutil -hashfile PhantomSetup-v1.1.1.msi SHA256
 ```
 
 Compare the output to the matching line in `SHA256SUMS.txt`.
@@ -57,7 +57,7 @@ Double-click the MSI. The installer is not yet code-signed, so Windows SmartScre
 Applying writes machine-wide registry keys, so run `apply` and `revert` from an **elevated** terminal (right-click > Run as administrator).
 
 ```
-phantom --version                       # reports phantom 1.1.0
+phantom --version                       # reports phantom 1.1.1
 phantom audit                           # read-only: see your starting exposure
 phantom profile generate my-profile
 phantom apply my-profile --layers 2     # elevated
@@ -73,13 +73,13 @@ Phantom ships as a `.deb`, an `.rpm`, and a portable tarball. All three install 
 
 ```
 # Debian / Ubuntu
-sudo apt-get install ./phantom_1.1.0-1_amd64.deb
+sudo apt-get install ./phantom_1.1.1-1_amd64.deb
 
 # Fedora / RHEL / openSUSE
-sudo dnf install ./phantom-1.1.0-1.x86_64.rpm      # or: sudo zypper install ...
+sudo dnf install ./phantom-1.1.1-1.x86_64.rpm      # or: sudo zypper install ...
 
 # Any distro (portable tarball)
-tar -xzf phantom-1.1.0-x86_64-linux.tar.gz && cd phantom-1.1.0-x86_64-linux && sudo ./install.sh
+tar -xzf phantom-1.1.1-x86_64-linux.tar.gz && cd phantom-1.1.1-x86_64-linux && sudo ./install.sh
 ```
 
 Installing enables `phantom.service`, which reapplies your active profile on boot. Nothing changes on your machine until you run an explicit `apply`.

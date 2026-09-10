@@ -8,7 +8,7 @@ license = "Proprietary"
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 bytes = "1"
-hmac = "0.12"
+hmac = "0.13"
 http-body-util = "0.1"
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }

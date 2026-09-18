@@ -1,4 +1,5 @@
 use rand::Rng;
+use rand::RngExt;
 
 pub struct BoardVendor {
     pub manufacturer: &'static str,
@@ -56,12 +57,12 @@ impl SerialCharset {
         match self {
             SerialCharset::AlphaNumeric => {
                 const CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-                CHARS[rng.gen_range(0..CHARS.len())] as char
+                CHARS[rng.random_range(0..CHARS.len())] as char
             }
-            SerialCharset::Numeric => (b'0' + rng.gen_range(0..10u8)) as char,
+            SerialCharset::Numeric => (b'0' + rng.random_range(0..10u8)) as char,
             SerialCharset::HexUpper => {
                 const CHARS: &[u8] = b"0123456789ABCDEF";
-                CHARS[rng.gen_range(0..CHARS.len())] as char
+                CHARS[rng.random_range(0..CHARS.len())] as char
             }
         }
     }

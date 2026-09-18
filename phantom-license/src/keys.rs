@@ -14,7 +14,7 @@
 //! ARE visible in the binary; that is intentional. Knowing "which
 //! purposes exist" without the master key is worthless.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 include!(concat!(env!("OUT_DIR"), "/master_key_obf.rs"));

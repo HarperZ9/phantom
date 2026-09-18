@@ -1,5 +1,4 @@
 use rand::Rng;
-use rand::RngExt;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
@@ -10,12 +9,12 @@ use super::vendor_db::*;
 pub fn generate_profile(seed: &str, name: &str) -> HardwareProfile {
     let mut rng = seed_to_rng(seed);
 
-    let board_vendor = &BOARD_VENDORS[rng.random_range(0..BOARD_VENDORS.len())];
-    let disk_vendor = &DISK_VENDORS[rng.random_range(0..DISK_VENDORS.len())];
-    let nic_vendor = &NIC_VENDORS[rng.random_range(0..NIC_VENDORS.len())];
-    let gpu_vendor = &GPU_VENDORS[rng.random_range(0..GPU_VENDORS.len())];
-    let tpm_vendor = &TPM_VENDORS[rng.random_range(0..TPM_VENDORS.len())];
-    let display_vendor = &DISPLAY_VENDORS[rng.random_range(0..DISPLAY_VENDORS.len())];
+    let board_vendor = &BOARD_VENDORS[rng.gen_range(0..BOARD_VENDORS.len())];
+    let disk_vendor = &DISK_VENDORS[rng.gen_range(0..DISK_VENDORS.len())];
+    let nic_vendor = &NIC_VENDORS[rng.gen_range(0..NIC_VENDORS.len())];
+    let gpu_vendor = &GPU_VENDORS[rng.gen_range(0..GPU_VENDORS.len())];
+    let tpm_vendor = &TPM_VENDORS[rng.gen_range(0..TPM_VENDORS.len())];
+    let display_vendor = &DISPLAY_VENDORS[rng.gen_range(0..DISPLAY_VENDORS.len())];
 
     let system_uuid = generate_uuid(&mut rng);
 
@@ -80,7 +79,7 @@ fn generate_smbios<R: Rng>(
     system_uuid: &str,
     rng: &mut R,
 ) -> SmbiosIdentifiers {
-    let product = vendor.products[rng.random_range(0..vendor.products.len())];
+    let product = vendor.products[rng.gen_range(0..vendor.products.len())];
     let board_serial = generate_serial(
         vendor.serial_prefix,
         vendor.serial_suffix_len,
@@ -125,10 +124,10 @@ fn generate_smbios<R: Rng>(
 }
 
 fn generate_disks<R: Rng>(vendor: &DiskVendor, rng: &mut R) -> Vec<DiskIdentifiers> {
-    let disk_count = rng.random_range(1..=3u32);
+    let disk_count = rng.gen_range(1..=3u32);
     (0..disk_count)
         .map(|i| {
-            let model = vendor.models[rng.random_range(0..vendor.models.len())];
+            let model = vendor.models[rng.gen_range(0..vendor.models.len())];
             let serial = generate_serial(
                 vendor.serial_prefix,
                 vendor.serial_suffix_len,
@@ -141,7 +140,7 @@ fn generate_disks<R: Rng>(vendor: &DiskVendor, rng: &mut R) -> Vec<DiskIdentifie
                 SerialCharset::AlphaNumeric,
                 rng,
             );
-            let volume_serial = format!("{:04X}-{:04X}", rng.random::<u16>(), rng.random::<u16>(),);
+            let volume_serial = format!("{:04X}-{:04X}", rng.gen::<u16>(), rng.gen::<u16>(),);
             let volume_guid = generate_uuid(rng);
 
             DiskIdentifiers {
@@ -157,10 +156,10 @@ fn generate_disks<R: Rng>(vendor: &DiskVendor, rng: &mut R) -> Vec<DiskIdentifie
 }
 
 fn generate_nics<R: Rng>(vendor: &NicVendor, rng: &mut R) -> Vec<NetworkIdentifiers> {
-    let nic_count = rng.random_range(1..=2u32);
+    let nic_count = rng.gen_range(1..=2u32);
     (0..nic_count)
         .map(|i| {
-            let oui = vendor.oui_prefixes[rng.random_range(0..vendor.oui_prefixes.len())];
+            let oui = vendor.oui_prefixes[rng.gen_range(0..vendor.oui_prefixes.len())];
             let mut mac_bytes = [0u8; 6];
             mac_bytes[0] = oui[0];
             mac_bytes[1] = oui[1];
@@ -193,9 +192,9 @@ fn generate_nics<R: Rng>(vendor: &NicVendor, rng: &mut R) -> Vec<NetworkIdentifi
 }
 
 fn generate_gpus<R: Rng>(vendor: &GpuDevice, rng: &mut R) -> Vec<GpuIdentifiers> {
-    let (device_id, _name) = vendor.devices[rng.random_range(0..vendor.devices.len())];
-    let subsys: u32 = rng.random();
-    let instance_suffix: u32 = rng.random();
+    let (device_id, _name) = vendor.devices[rng.gen_range(0..vendor.devices.len())];
+    let subsys: u32 = rng.gen();
+    let instance_suffix: u32 = rng.gen();
 
     vec![GpuIdentifiers {
         vendor_id: format!("{:04X}", vendor.vendor_id),
@@ -218,9 +217,9 @@ fn generate_tpm(vendor: &TpmVendor) -> TpmIdentifiers {
 }
 
 fn generate_displays<R: Rng>(vendor: &DisplayVendor, rng: &mut R) -> Vec<DisplayIdentifiers> {
-    let product_code = rng.random_range(vendor.product_code_range.0..=vendor.product_code_range.1);
+    let product_code = rng.gen_range(vendor.product_code_range.0..=vendor.product_code_range.1);
     let serial = generate_serial("", 8, SerialCharset::AlphaNumeric, rng);
-    let year = rng.random_range(2020..=2025u16);
+    let year = rng.gen_range(2020..=2025u16);
 
     vec![DisplayIdentifiers {
         manufacturer_code: vendor.manufacturer_code.to_string(),
@@ -233,11 +232,11 @@ fn generate_displays<R: Rng>(vendor: &DisplayVendor, rng: &mut R) -> Vec<Display
 fn generate_os_ids<R: Rng>(system_uuid: &str, rng: &mut R) -> OsIdentifiers {
     let machine_guid = derive_machine_guid(system_uuid, rng);
 
-    let adj = COMPUTER_NAME_ADJECTIVES[rng.random_range(0..COMPUTER_NAME_ADJECTIVES.len())];
+    let adj = COMPUTER_NAME_ADJECTIVES[rng.gen_range(0..COMPUTER_NAME_ADJECTIVES.len())];
     let suffix = generate_serial("", 7, SerialCharset::AlphaNumeric, rng);
     let computer_name = format!("{}-{}", adj, suffix);
 
-    let pid_prefix = PRODUCT_ID_PREFIXES[rng.random_range(0..PRODUCT_ID_PREFIXES.len())];
+    let pid_prefix = PRODUCT_ID_PREFIXES[rng.gen_range(0..PRODUCT_ID_PREFIXES.len())];
     let product_id = format!(
         "{}-{}-{}-{}",
         pid_prefix,
@@ -246,7 +245,7 @@ fn generate_os_ids<R: Rng>(system_uuid: &str, rng: &mut R) -> OsIdentifiers {
         generate_serial("", 5, SerialCharset::Numeric, rng),
     );
 
-    let install_date = rng.random_range(1640000000u64..=1724000000u64);
+    let install_date = rng.gen_range(1640000000u64..=1724000000u64);
 
     OsIdentifiers {
         machine_guid,
@@ -261,7 +260,7 @@ fn generate_os_ids<R: Rng>(system_uuid: &str, rng: &mut R) -> OsIdentifiers {
 fn derive_machine_guid<R: Rng>(system_uuid: &str, rng: &mut R) -> String {
     let mut hasher = Sha256::new();
     hasher.update(system_uuid.as_bytes());
-    hasher.update(rng.random::<u64>().to_le_bytes());
+    hasher.update(rng.gen::<u64>().to_le_bytes());
     let hash = hasher.finalize();
 
     format!(
@@ -277,7 +276,7 @@ fn derive_machine_guid<R: Rng>(system_uuid: &str, rng: &mut R) -> String {
 fn generate_boot_ids<R: Rng>(rng: &mut R) -> BootIdentifiers {
     BootIdentifiers {
         bcd_guid: format!("{{{}}}", generate_uuid(rng)),
-        disk_signature: format!("{:08X}", rng.random::<u32>()),
+        disk_signature: format!("{:08X}", rng.gen::<u32>()),
     }
 }
 
@@ -345,6 +344,24 @@ mod tests {
         assert_eq!(
             p1.network_adapters[0].permanent_mac,
             p2.network_adapters[0].permanent_mac
+        );
+    }
+
+    #[test]
+    fn fixed_seed_identity_payload_stays_compatible() {
+        let p = generate_profile("test-seed-123", "test");
+        let mut value = serde_json::to_value(&p).unwrap();
+        value.as_object_mut().unwrap().remove("metadata");
+        let bytes = serde_json::to_string(&value).unwrap();
+        let digest = Sha256::digest(bytes.as_bytes());
+        let hex = digest
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+
+        assert_eq!(
+            hex, "42a82e11b03a15a174d65479ecd71e21f763cfc8f3503602e474bf94372a39e8",
+            "same seed must preserve the generated identity payload"
         );
     }
 

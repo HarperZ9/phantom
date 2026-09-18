@@ -198,7 +198,9 @@ pub fn run(action: ProfileAction, json: bool) {
 }
 
 fn generate_random_seed() -> String {
-    let bytes: [u8; 16] = rand::random();
+    use rand::Rng;
+    let mut rng = rand::rngs::OsRng;
+    let bytes: [u8; 16] = rng.gen();
     format!(
         "phantom-{}",
         bytes

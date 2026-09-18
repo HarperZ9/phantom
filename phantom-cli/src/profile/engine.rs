@@ -348,6 +348,24 @@ mod tests {
     }
 
     #[test]
+    fn fixed_seed_identity_payload_stays_compatible() {
+        let p = generate_profile("test-seed-123", "test");
+        let mut value = serde_json::to_value(&p).unwrap();
+        value.as_object_mut().unwrap().remove("metadata");
+        let bytes = serde_json::to_string(&value).unwrap();
+        let digest = Sha256::digest(bytes.as_bytes());
+        let hex = digest
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<String>();
+
+        assert_eq!(
+            hex, "42a82e11b03a15a174d65479ecd71e21f763cfc8f3503602e474bf94372a39e8",
+            "same seed must preserve the generated identity payload"
+        );
+    }
+
+    #[test]
     fn different_seeds_produce_different_profiles() {
         let p1 = generate_profile("seed-a", "a");
         let p2 = generate_profile("seed-b", "b");

@@ -39,7 +39,7 @@ jobs:
             bin_ext: ".exe"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -173,21 +173,21 @@ jobs:
       # ships its zip. Only one of these runs per matrix leg.
       - name: Upload artifacts (Linux)
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phantom-${{ matrix.target }}
           path: linux-dist/*
           if-no-files-found: error
       - name: Upload artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phantom-${{ matrix.target }}
           path: phantom-${{ env.RELEASE_VERSION }}-${{ matrix.target }}.*
           if-no-files-found: error
       - name: Upload MSI
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: phantom-msi
           path: phantom-installer/out/PhantomSetup-*.msi
@@ -200,9 +200,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true

@@ -29,7 +29,7 @@ pub fn master_key_generation() -> u8 {
 /// document with the `mac` field cleared). Verify with
 /// [`verify_state_mac_hex`] before trusting the document.
 pub fn state_mac_hex(data: &[u8]) -> String {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
     let sk = keys::derive_key(keys::STATE_PURPOSE);

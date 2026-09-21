@@ -231,7 +231,7 @@ jobs:
             echo "value=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # On workflow_dispatch there is no tag yet; the action
           # creates it against the current commit. On a tag-push

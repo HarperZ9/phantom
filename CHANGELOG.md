@@ -6,6 +6,9 @@ All notable changes to Phantom are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- Keep the Windows display reader compatible with winreg 0.56 by taking ownership of its raw EDID bytes before parsing them.
+
 ## [1.1.1] - 2026-09-10
 
 ### Changed

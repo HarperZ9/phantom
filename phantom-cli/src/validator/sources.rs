@@ -1070,7 +1070,7 @@ fn read_display_devices() -> Result<Vec<RawDisplayInfo>, String> {
             };
 
             let edid: Vec<u8> = match params.get_raw_value("EDID") {
-                Ok(v) => v.bytes,
+                Ok(v) => v.bytes.into_owned(),
                 Err(_) => continue,
             };
 

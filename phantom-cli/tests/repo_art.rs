@@ -42,10 +42,32 @@ fn readme() -> String {
 /// A rendered file nobody embeds is a file nobody sees, so both are checked.
 #[test]
 fn every_drawing_is_committed_and_reaches_the_page() {
-    let page = readme();
+    let front = readme();
+    // The previous header left the README on 4 October 2026 and is recorded in the brand
+    // notes; a page here is the README or a doc under docs/, the set the art gate uses.
+    let mut page = front.clone();
+    for dir in ["docs", "docs/brand"] {
+        if let Ok(entries) = std::fs::read_dir(repo_root().join(dir)) {
+            let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
+            paths.sort();
+            for path in paths
+                .into_iter()
+                .filter(|p| p.extension().is_some_and(|x| x == "md"))
+            {
+                page.push_str(&std::fs::read_to_string(&path).unwrap_or_default());
+            }
+        }
+    }
     for drawing in DRAWINGS {
         assert!(repo_root().join(drawing).is_file(), "missing: {}", drawing);
         assert!(page.contains(drawing), "not embedded: {}", drawing);
+    }
+    for hero in ["docs/art/hero-dark.svg", "docs/art/hero-light.svg"] {
+        assert!(
+            repo_root().join(hero).is_file() && front.contains(hero),
+            "hero not on the README: {}",
+            hero
+        );
     }
 }
 

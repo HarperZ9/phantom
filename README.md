@@ -1,8 +1,15 @@
-# Phantom
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/HarperZ9/phantom/main/docs/art/hero-dark.svg">
+  <img src="https://raw.githubusercontent.com/HarperZ9/phantom/main/docs/art/hero-light.svg" alt="phantom: Audit and rotate hardware identifiers with exact backup and revert. Bundles of fine lines carry the work through 5 stations, audit, generate, apply, validate and revert, along a sweeping path into a bright core." width="100%">
+</picture>
 
-<p align="center">
-  <img src="docs/art/phantom-header.svg" alt="Phantom" width="100%">
-</p>
+# phantom
+
+Audit and rotate hardware identifiers with exact backup and revert.
+
+[![version: 1.1.1](https://img.shields.io/badge/version-1.1.1-e6e1d6?style=flat-square&labelColor=1a1712)](https://github.com/HarperZ9/phantom/releases/latest)
+[![CI](https://github.com/HarperZ9/phantom/actions/workflows/ci.yml/badge.svg)](https://github.com/HarperZ9/phantom/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-Phantom_Proprietary_License-e6e1d6?style=flat-square&labelColor=1a1712)](https://github.com/HarperZ9/phantom/blob/main/LICENSE)
 
 Hardware identity privacy for authorized Windows and Linux systems.
 

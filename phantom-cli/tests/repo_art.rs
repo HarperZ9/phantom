@@ -50,7 +50,10 @@ fn every_drawing_is_committed_and_reaches_the_page() {
         if let Ok(entries) = std::fs::read_dir(repo_root().join(dir)) {
             let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
             paths.sort();
-            for path in paths.into_iter().filter(|p| p.extension().map_or(false, |x| x == "md")) {
+            for path in paths
+                .into_iter()
+                .filter(|p| p.extension().is_some_and(|x| x == "md"))
+            {
                 page.push_str(&std::fs::read_to_string(&path).unwrap_or_default());
             }
         }
@@ -60,7 +63,11 @@ fn every_drawing_is_committed_and_reaches_the_page() {
         assert!(page.contains(drawing), "not embedded: {}", drawing);
     }
     for hero in ["docs/art/hero-dark.svg", "docs/art/hero-light.svg"] {
-        assert!(repo_root().join(hero).is_file() && front.contains(hero), "hero not on the README: {}", hero);
+        assert!(
+            repo_root().join(hero).is_file() && front.contains(hero),
+            "hero not on the README: {}",
+            hero
+        );
     }
 }
 

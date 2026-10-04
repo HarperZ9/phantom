@@ -197,3 +197,9 @@ jobs:
       # Partner Center path (docs/windows-driver-signing.md).
       - name: Compile and link the driver (Release x64)
         run: msbuild phantom-driver\phantom.vcxproj /t:Link /p:Configuration=Release /p:Platform=x64 /nologo
+  art-receipts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify art receipt digests
+        run: python3 scripts/check_art_receipts.py

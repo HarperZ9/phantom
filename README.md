@@ -11,62 +11,72 @@ Audit and rotate hardware identifiers with exact backup and revert.
 [![CI](https://github.com/HarperZ9/phantom/actions/workflows/ci.yml/badge.svg)](https://github.com/HarperZ9/phantom/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-Phantom_Proprietary_License-e6e1d6?style=flat-square&labelColor=1a1712)](https://github.com/HarperZ9/phantom/blob/main/LICENSE)
 
-Hardware identity privacy for authorized Windows and Linux systems.
+Phantom is a command-line tool for Windows and Linux that shows which hardware identifiers software on your machine can read, and replaces the operating-system identifiers among them with values from a generated profile. It saves every original value before the first write, and `phantom revert` puts them back exactly.
 
-Every application on your machine can read dozens of unique hardware identifiers: motherboard serials, disk serials, MAC addresses, GPU device IDs, TPM module IDs, the Windows registry machine GUID, the Linux machine ID. Software uses these to fingerprint your device, track it across reinstalls, and build a permanent hardware dossier without your knowledge or consent.
+On Windows it changes five registry values: MachineGuid, HwProfileGuid, the SQM MachineId, ProductId and InstallDate. On Linux it changes the machine ID, the hostname and the MAC address of each physical network interface. These changes are machine-wide. Every process and every user sees the new values, and there is no per-application mode.
 
-Phantom audits what your machine reveals, generates internally consistent identity profiles, and applies them to the identifiers software reads most often. It backs up every original value before it writes, and restores them exactly on revert or uninstall.
+Identifiers that come from firmware or hardware stay as they are. That covers SMBIOS board and system serials, disk serials, GPU device IDs, TPM details, display EDID, and on Windows the network adapter MAC. Software that reads those directly will still see the real machine. Phantom generates matching values for them in every profile, but no released version applies them. A kernel driver and a UEFI module for that work exist in the source tree as unfinished, unshipped code (see [Scope](#scope)).
 
-Phantom is for machines you own or are expressly authorized to test. It is not a tool for evading fraud controls or misrepresenting a device you do not control.
+Use Phantom on machines you own or are authorized to test. Its Terms of Use prohibit fraud and criminal use, and it does not target anti-cheat or fraud-detection systems.
 
 ## Who this is for
 
-Phantom serves operators who need to control what their hardware reports to software running on it. Concrete use cases:
-
-- **Penetration testers and red teams** who rotate hardware identity between assessments so residual fingerprints from one engagement do not contaminate the next.
-- **QA and device-testing teams** who need to validate software behavior across a range of hardware profiles without maintaining a physical device lab.
-- **Privacy researchers** studying how applications fingerprint and track devices, and what identifiers carry the most weight.
-- **Enterprise IT and fleet management** teams provisioning standardized device identities across imaging pipelines.
-- **Forensic and incident-response analysts** who build isolated examination environments and need to control which identifiers the examined software sees.
-
-Phantom is a privacy and authorized-testing tool. It does not target anti-cheat systems, game services, or fraud-detection infrastructure. Its Terms of Use prohibit financial fraud, evasion of lawful court orders, and criminal activity in any jurisdiction.
+- **Privacy researchers** who want to see which identifiers an application reads and how it behaves when they change.
+- **QA and device-testing teams** who need software to see a different machine identity without reimaging or keeping a device lab.
+- **Penetration testers and red teams** who reset OS-level machine identity between engagements on their own test hosts.
+- **Forensic and incident-response analysts** who build examination environments and want to control the OS-level identifiers the examined software sees.
 
 ![Eight stages of applying a hardware identity: audit, generate, consistent, capture, backup, write, validate, and revert. The audit reads seven identifier sources and writes nothing. Generate hashes one seed string with SHA-256 and uses the result to key a ChaCha20 stream, so the same seed rebuilds the same identity on any machine. The generated values stay internally consistent: a Samsung disk serial carries Samsung's format, and an Intel network adapter takes one of the registered Intel prefixes. Capture reads each live registry value together with the type it is stored under, because a string written where a number belongs corrupts the value. The backup is saved to disk before a single write happens. Then the identifiers are written: five registry values on Windows, three on Linux. Validate re-reads every source and compares it field by field. Revert restores each original at the type it was recorded under. Three outcomes: originals kept, nothing written, and modeled only.](docs/art/apply-lane.svg)
 
 ## What v1.1.1 does
 
-- **Audit.** Read and report every hardware identifier software can see on this machine. Nothing is modified.
-- **Generate.** Build a realistic, internally consistent identity profile from a seed. Samsung disk serials match Samsung's format; Intel MACs use real Intel OUI prefixes. One seed reproduces the same identity every time.
-- **Apply (Layer 2).** On Windows, spoof the five registry identifiers that carry the most fingerprinting weight. On Linux, spoof the machine ID, the hostname, and the MAC of each physical interface. See [What apply changes](#what-apply-changes).
-- **Validate.** Confirm every identifier source reports consistently after an apply.
-- **Revert.** Restore the exact original values, from a backup written before the first change.
+- **Audit.** Reads seven sources (the SMBIOS firmware table, the Windows registry, disks, network adapters, GPUs, display EDID and the TPM) and prints what software can see. It writes nothing and runs without elevation.
+- **Generate.** Builds a full identity profile from a seed string. Values follow real vendor formats: a Samsung disk gets a Samsung-style serial, and an Intel network adapter gets a registered Intel MAC prefix. The same seed always produces the same profile.
+- **Apply.** Writes the Windows or Linux identifiers listed above, after saving a backup. A second apply keeps the first backup, so revert still returns the true originals. See [What apply changes](#what-apply-changes).
+- **Validate.** Re-reads every source and compares it field by field with the profile. It checks the whole profile, so on Windows the firmware, disk, network, GPU and TPM fields will show as mismatches after an apply, because apply does not change them.
+- **Revert.** Restores each original value from the backup, at the registry type it was stored under. Uninstalling also reverts first.
 
-Layer 1 (kernel driver) and Layer 0 (UEFI/DXE firmware) are modeled but not shipped. See [Scope](#scope).
+Changing these values can have side effects. Software that tied its own licence or enrolment to MachineGuid or the machine ID may treat the machine as new, and on Linux systemd-networkd derives its default DHCP client ID from the machine ID, so your network may hand out a different address.
+
+## How it compares
+
+- **MAC changers** such as Technitium MAC Address Changer on Windows or `macchanger` on Linux change one identifier. Phantom does not change the MAC on Windows, and on Linux it changes the MAC together with the machine ID and hostname, from one profile, with a single revert.
+- **`systemd-machine-id-setup` and `hostnamectl`** on Linux can set the same values by hand. Phantom adds the backup, the seeded profile, validation and exact revert.
+- **Sysprep** on Windows generalizes an image before it is deployed. It is a one-way step for imaging. Phantom changes a running system and can undo the change.
+- **A fresh virtual machine** in Hyper-V, VirtualBox or VMware gives software a new identity at every layer, firmware and disks included. Phantom covers fewer identifiers and works on the physical machine you already use.
+- **Browser anti-fingerprinting** in Tor Browser or Brave works on what web pages can see. Phantom works on what installed programs read from the OS.
 
 ## Getting started on Windows
 
-### 1. Download and verify
+### Try it without installing
 
-Download `PhantomSetup-v1.1.1.msi` from [Releases](https://github.com/HarperZ9/phantom/releases), along with `SHA256SUMS.txt`. Verify it before running:
+The release also ships a portable zip, `phantom-v1.1.1-x86_64-pc-windows-msvc.zip`. Unzip it and run `phantom.exe` from a normal terminal. Auditing and working with profiles need no elevation.
+
+```
+phantom --version                       # phantom 1.1.1
+phantom audit                           # read-only: what software can see
+phantom profile generate my-profile --seed "any memorable string"
+phantom profile list
+phantom validate my-profile             # compare the live system with the profile
+```
+
+Before you apply anything, `validate` reports mismatches and exits with status 1, since the live system still carries its original values.
+
+### Install with the MSI
+
+Download `PhantomSetup-v1.1.1.msi` and `SHA256SUMS.txt` from [Releases](https://github.com/HarperZ9/phantom/releases) and check the hash before you run it:
 
 ```
 certutil -hashfile PhantomSetup-v1.1.1.msi SHA256
 ```
 
-Compare the output to the matching line in `SHA256SUMS.txt`.
+Compare the output with the matching line in `SHA256SUMS.txt`. The installer is not code-signed yet, so SmartScreen shows "Windows protected your PC". Click **More info**, then **Run anyway**, and accept the UAC prompt and the licence agreement. The MSI installs three programs under `Program Files\Phantom`: the `phantom.exe` CLI, the `phantom-svc.exe` service that reapplies your last applied profile at boot, and the `phantom-tray.exe` status icon.
 
-### 2. Install
+### Apply and revert
 
-Double-click the MSI. The installer is not yet code-signed, so Windows SmartScreen shows "Windows protected your PC". Click **More info**, then **Run anyway**. Accept the UAC prompt and the license agreement. Three components install to `C:\Program Files\Phantom\`: the `phantom.exe` CLI, the `phantom-svc.exe` background service that reapplies your active profile across reboots, and the `phantom-tray.exe` status indicator.
-
-### 3. Use it
-
-Applying writes machine-wide registry keys, so run `apply` and `revert` from an **elevated** terminal (right-click > Run as administrator).
+`apply` and `revert` write machine-wide registry keys, so run them from a terminal opened as administrator (right-click, Run as administrator).
 
 ```
-phantom --version                       # reports phantom 1.1.1
-phantom audit                           # read-only: see your starting exposure
-phantom profile generate my-profile
 phantom apply my-profile --layers 2     # elevated
 phantom validate my-profile
 phantom revert                          # elevated: restore the originals
@@ -147,11 +157,13 @@ A profile *models* a much wider identifier set (SMBIOS and board serials, disk s
 
 ## Tiers and licensing
 
-| Tier | Layers | Profiles | Background service |
-|------|--------|----------|--------------------|
-| Free | Layer 2 | 2 | No |
-| Pro | All layers as they ship | 50 | Yes |
-| Enterprise | All layers as they ship | Unlimited | Yes |
+| Tier | Layers | Saved profiles |
+|------|--------|----------------|
+| Free | Layer 2 | 2 |
+| Pro | All layers as they ship | 50 |
+| Enterprise | All layers as they ship | Unlimited |
+
+In 1.1.1 the boot-time reapply service runs on every tier, Free included.
 
 Keys are HMAC-signed and bound to one machine's hardware fingerprint: a key issued for your machine is worthless on any other. `phantom license request` prints the fingerprint and build details your licensing contact needs; they issue a key bound to it. Full details in [docs/user/licensing.md](docs/user/licensing.md).
 
@@ -247,7 +259,7 @@ sudo ./uninstall.sh
 
 Phantom ships the Layer-2 path on both platforms, verified end to end (audit, generate, apply, validate, revert, reboot persistence, and clean uninstall) on fresh Windows and Linux VMs. It is honest about its edges:
 
-- **Layer 2 only.** Layers 1 (kernel driver) and 0 (UEFI/DXE firmware) are modeled but not shipped. The Layer 1 kernel driver now compiles in CI and two of its security defects are fixed, but it is unsigned and not yet functional end to end. See `docs/kernel-driver-review.md` and `docs/windows-driver-signing.md`.
+- **Layer 2 only.** Layers 1 (kernel driver) and 0 (UEFI/DXE firmware) are modeled but not shipped. The Layer 1 kernel driver compiles and links in CI, and several memory-safety defects in it are fixed. It does not work end to end: its attach and detach requests return not-implemented, so it intercepts nothing, and its GPU PnP path is never dispatched. It is also unsigned. See `docs/kernel-driver-review.md` and `docs/windows-driver-signing.md`.
 - **Unsigned.** The Windows MSI is not yet code-signed; SmartScreen will warn until a signing certificate is in place. The Linux packages ship with published `SHA256SUMS.txt`.
 - **Authorized use.** Intended for machines you own or are expressly authorized to test.
 

@@ -197,6 +197,56 @@ Breakage: a fail-closed gate blocks everything when the tunnel is down, includin
 
 Effort: policy layer, WFP gate and self-test 12 to 18 days; padding 3 to 5 more; a custom transport 15 to 25 more if the self-test justifies it (low confidence).
 
+### 4.1 Threat model (added 2026-11-04, privacy phase 2)
+
+The author's principle for this work, 2026-11-04: privacy for personal acts, accountability for acts with outward reach. The protocol protects the low-reach end: what the station is, where it is, and what its operator reads and fetches. It does not hide acts that reach other people. Signed commits, published releases, PR merges and Flywheel receipts stay attributable to the account by design, and the protocol carries them over an authenticated class, never an anonymous one.
+
+Assets, in the order the phase 2 audit found them leaking (`C:/dev/mission-control/2026-11-04-privacy-phase2/AUDIT.md`):
+
+1. The operator's personal address and name.
+2. The residential network location: the IPv4 address, the IPv6 /64 and the ISP resolver's view of every hostname.
+3. Station identity: machine name, MACs, hardware serials, the serials of attached devices (monitor EDID), the tailnet name.
+4. Activity pattern: which hosts, when, how much, in which time zone.
+5. Content: what a hosted model reads.
+
+Adversaries and what each sees today:
+
+| Observer | Position | Sees today | Protocol goal |
+|---|---|---|---|
+| LAN and Wi-Fi neighbours | link | MAC, DHCP hostname, mDNS, LLMNR and NetBIOS names | Per-network MAC, generic hostname, name services off on untrusted links |
+| ISP (Comcast) | first IP hop | every DNS name in clear (resolver 75.75.75.75, DoH not applied), every destination IP, volume and timing | Encrypted DNS inside the tunnel; only the tunnel endpoint visible |
+| Destination servers, research APIs and CDNs | far end | residential IP, User-Agent, any contact string in headers or query | Exit IP per class; one neutral User-Agent; no contact strings |
+| Account services (GitHub, Anthropic, OpenAI, Google, Microsoft, Tailscale) | far end, authenticated | the account, the source IP, the device name, plus whatever the service writes in the account's name | Exit per identity; service-side settings (below) |
+| Hosted model providers | far end, authenticated | the account, IP, and every prompt and tool result | Redaction and local routing (3.7); the protocol only removes the IP |
+| Archives and mirrors of public work | after publication | commit author and committer addresses, time zones, file metadata | Out of the protocol's reach: the publish gate and git config handle it |
+
+Out of scope: an adversary with code execution on the station, a global passive observer who correlates timing at both ends (cover traffic only raises its cost), and the providers' own retention. The protocol also cannot change what an account service writes on its own side. The phase 2 audit found the clearest case: a PR merged through GitHub's web or API path writes the account's primary address into the merge commit as author or committer, whatever the local `user.email` says, and no network property fixes that. The fix is the account setting that keeps the address private, so service-side writes are a requirement on configuration, listed as R12 below.
+
+### 4.2 Requirements added by the phase 2 audit
+
+These extend the nine properties above.
+
+10. **Header hygiene is enforced at the egress, as well as in source.** The scrubber's fetch-code check catches a contact address in source; a station proxy for the research class also strips or rewrites `User-Agent`, `From`, `mailto` query parameters and `Referer` on the way out, so a script the check never saw cannot leak. Allowed values: `research-fetch/1.0` for the User-Agent, nothing else.
+11. **Local data at rest is classed.** Raw probes that hold serials of the station or of attached devices (the 2026-11-04 cable probe held two monitors' EDID serials) are written under the Phantom data directory with masked copies for anything a hosted model reads, so the data never reaches a prompt at all.
+12. **Service-side identity is checked at join time.** The self-test (property 8) also reads, through each service's API, the settings that decide what the service publishes in the account's name: GitHub email privacy and the public profile email, the Tailscale node name, the Syncthing announce settings. A finding blocks nothing; it is reported, since these are account settings the operator owns.
+13. **Per-class merge path for public work.** Merges of the operator's own PRs go through a path that writes only the noreply address: a local merge or fast-forward pushed over the authenticated class, until R12's account setting is on.
+14. **Reach decides the class.** Each flow's class follows the gradient in 4.1: personal reads and fetches go anonymous or through the research exit; acts with outward reach (push, merge, release, post, send) go over the authenticated class and are receipted to Flywheel.
+
+### 4.3 How Phantom's identity layers map onto the protocol
+
+| Phantom layer or surface | Identifier it governs | Protocol role | When it acts |
+|---|---|---|---|
+| L0 firmware (DXE, modelled) | SMBIOS UUID, board serial | none on the wire; keeps them out of anything a process can upload | boot |
+| L1 driver (unsigned, not functional) | disk, NVMe and USB serials, permanent MAC, EDID as read by user processes | none on the wire; same as L0 | boot and device arrival |
+| L2 OS (shipped, five registry values) | MachineGuid, HwProfileGuid, SQM MachineId, ProductId, InstallDate; ComputerName (modelled) | the hostname the protocol announces derives from the profile, never ComputerName | apply, then each join |
+| RF and LAN (3.3) | Wi-Fi MAC and probes, DHCP options 12 and 61, DUID, mDNS, LLMNR, NetBIOS, BT name | property 1: per-network MAC as HMAC(seed, network ID); generic DHCP identity; name services off | each network join, by `phantom-svc` |
+| Network (3.4) | public IP, IPv6 prefix, DNS, JA3 and JA4, Tor, Tailscale node name | properties 2 to 5 and 7 to 9: the WFP gate, class table, tunnel DNS, padding, exit per identity | always, gate closed by default |
+| Application (3.5) | User-Agent, contact strings, app telemetry, git and gh identity | properties 6, 10, 12 and 13 | egress proxy per request; config at apply |
+| Content (3.6) | file metadata, paths, addresses | none on the wire; the publish gate runs before any push the protocol carries | pre-commit and CI |
+| Inference (3.7) | account, IP, prompt content | the protocol supplies only the exit IP; redaction and local routing supply the rest | per request |
+
+The profile seed is the one secret every layer derives from, so the MAC, DHCP identity and hostname a network sees agree with each other and differ from every other network's. Rotating the seed is a deliberate act with its own receipt.
+
 ## 5. Cross-cutting breakage risks
 
 | Risk | Triggered by | Mitigation |

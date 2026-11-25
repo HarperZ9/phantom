@@ -104,18 +104,24 @@ pub fn backup_path() -> std::path::PathBuf {
 }
 
 pub fn save_backup(backup: &RegistryBackup) -> std::io::Result<()> {
-    let path = backup_path();
+    save_backup_to(&backup_path(), backup)
+}
+
+pub fn save_backup_to(path: &std::path::Path, backup: &RegistryBackup) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_string_pretty(backup)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    std::fs::write(&path, json)
+    std::fs::write(path, json)
 }
 
 pub fn load_backup() -> std::io::Result<RegistryBackup> {
-    let path = backup_path();
-    let json = std::fs::read_to_string(&path)?;
+    load_backup_from(&backup_path())
+}
+
+pub fn load_backup_from(path: &std::path::Path) -> std::io::Result<RegistryBackup> {
+    let json = std::fs::read_to_string(path)?;
     serde_json::from_str(&json).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
@@ -164,7 +170,7 @@ const STRING_TARGETS: &[(&str, &str, ProfileField)] = &[
 /// then revert or uninstall would restore a spoof instead of the machine's
 /// own identity. Keeping the existing entry means the true original, captured
 /// once, is never lost to a second apply.
-pub(crate) fn merge_preserving_originals(
+pub fn merge_preserving_originals(
     existing: Vec<RegistryBackupEntry>,
     captured: Vec<RegistryBackupEntry>,
 ) -> Vec<RegistryBackupEntry> {
@@ -179,6 +185,167 @@ pub(crate) fn merge_preserving_originals(
             .or_insert(entry);
     }
     by_key.into_values().collect()
+}
+
+/// Abstract registry key-value backend for cross-platform apply/revert testing.
+///
+/// Mirrors the Windows HKLM operations (`REG_SZ` and `REG_DWORD`) so the
+/// 3-phase backup-before-write apply protocol and typed restore protocol can be
+/// exercised deterministically in unit and integration tests without touching
+/// the host registry.
+pub trait RegistryStore {
+    fn read_sz(&self, path: &str, name: &str) -> Result<Option<String>, String>;
+    fn read_dword(&self, path: &str, name: &str) -> Result<Option<u32>, String>;
+    fn write_sz(&mut self, path: &str, name: &str, value: &str) -> Result<(), String>;
+    fn write_dword(&mut self, path: &str, name: &str, value: u32) -> Result<(), String>;
+}
+
+/// Apply the Layer-2 registry targets against an arbitrary [`RegistryStore`]
+/// and backup file path, preserving the exact 3-phase safety protocol:
+/// 1. Capture original values for keys not already backed up.
+/// 2. Persist the merged backup BEFORE mutating any key (aborting all writes
+///    if backup persistence fails).
+/// 3. Write each target with its declared [`BackupValueType`].
+pub fn apply_registry_with_store<S: RegistryStore>(
+    store: &mut S,
+    profile: &HardwareProfile,
+    backup_file: &std::path::Path,
+) -> ApplyResult {
+    use std::collections::BTreeSet;
+
+    let mut failed: Vec<(String, String)> = Vec::new();
+    let mut targets: Vec<(String, String, BackupValueType, String)> =
+        Vec::with_capacity(STRING_TARGETS.len() + 1);
+    for (path, name, field) in STRING_TARGETS {
+        targets.push((
+            (*path).to_string(),
+            (*name).to_string(),
+            BackupValueType::Sz,
+            field(profile),
+        ));
+    }
+    targets.push((
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion".to_string(),
+        "InstallDate".to_string(),
+        BackupValueType::Dword,
+        (profile.os.install_date as u32).to_string(),
+    ));
+
+    let existing_entries = load_backup_from(backup_file)
+        .map(|b| b.entries)
+        .unwrap_or_default();
+    let already_backed_up: BTreeSet<(String, String)> = existing_entries
+        .iter()
+        .map(|e| (e.path.clone(), e.value_name.clone()))
+        .collect();
+
+    let mut captured: Vec<RegistryBackupEntry> = Vec::new();
+    let mut writes: Vec<(String, String, BackupValueType, String)> = Vec::new();
+    for (path, name, vtype, new_value) in targets {
+        if already_backed_up.contains(&(path.clone(), name.clone())) {
+            writes.push((path, name, vtype, new_value));
+            continue;
+        }
+        let read_result = match vtype {
+            BackupValueType::Sz => store.read_sz(&path, &name),
+            BackupValueType::Dword => store
+                .read_dword(&path, &name)
+                .map(|opt| opt.map(|v| v.to_string())),
+        };
+        match read_result {
+            Ok(original) => {
+                if let Some(original_value) = original {
+                    captured.push(RegistryBackupEntry {
+                        path: path.clone(),
+                        value_name: name.clone(),
+                        original_value,
+                        value_type: vtype,
+                    });
+                }
+                writes.push((path, name, vtype, new_value));
+            }
+            Err(e) => failed.push((format!("{}\\{}", path, name), e)),
+        }
+    }
+
+    let merged = merge_preserving_originals(existing_entries, captured);
+    if !merged.is_empty() {
+        let backup = RegistryBackup {
+            entries: merged,
+            created_at: crate::profile::engine::current_timestamp(),
+        };
+        if let Err(e) = save_backup_to(backup_file, &backup) {
+            failed.push((
+                "backup".into(),
+                format!("Failed to save backup, no changes written: {}", e),
+            ));
+            return ApplyResult {
+                applied: Vec::new(),
+                failed,
+                skipped: Vec::new(),
+            };
+        }
+    }
+
+    let mut applied = Vec::new();
+    for (path, name, vtype, new_value) in writes {
+        let label = format!("{}\\{}", path, name);
+        let result = match vtype {
+            BackupValueType::Sz => store.write_sz(&path, &name, &new_value),
+            BackupValueType::Dword => match new_value.parse::<u32>() {
+                Ok(n) => store.write_dword(&path, &name, n),
+                Err(e) => {
+                    failed.push((label, format!("invalid DWORD value: {}", e)));
+                    continue;
+                }
+            },
+        };
+        match result {
+            Ok(()) => applied.push(label),
+            Err(e) => failed.push((label, e)),
+        }
+    }
+
+    ApplyResult {
+        applied,
+        failed,
+        skipped: Vec::new(),
+    }
+}
+
+/// Revert every entry in `backup` against an arbitrary [`RegistryStore`].
+pub fn revert_registry_with_store<S: RegistryStore>(
+    store: &mut S,
+    backup: &RegistryBackup,
+) -> ApplyResult {
+    let mut applied = Vec::new();
+    let mut failed = Vec::new();
+
+    for entry in &backup.entries {
+        let label = format!("{}\\{}", entry.path, entry.value_name);
+        let result = match entry.value_type {
+            BackupValueType::Sz => {
+                store.write_sz(&entry.path, &entry.value_name, &entry.original_value)
+            }
+            BackupValueType::Dword => match entry.original_value.parse::<u32>() {
+                Ok(n) => store.write_dword(&entry.path, &entry.value_name, n),
+                Err(e) => {
+                    failed.push((label, format!("corrupt DWORD in backup: {}", e)));
+                    continue;
+                }
+            },
+        };
+        match result {
+            Ok(()) => applied.push(label),
+            Err(e) => failed.push((label, e)),
+        }
+    }
+
+    ApplyResult {
+        applied,
+        failed,
+        skipped: Vec::new(),
+    }
 }
 
 #[cfg(windows)]

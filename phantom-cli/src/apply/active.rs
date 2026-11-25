@@ -15,7 +15,7 @@
 
 use super::Layer;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ActiveConfig {
@@ -54,14 +54,35 @@ impl ActiveConfig {
     }
 
     pub fn load() -> Option<Self> {
-        let data = std::fs::read_to_string(Self::path()).ok()?;
-        serde_json::from_str(&data).ok()
+        Self::load_from(&Self::path()).ok().flatten()
+    }
+
+    /// Load an active-profile record from an explicit path.
+    ///
+    /// Returns `Ok(None)` when the file does not exist and `Err(...)` when the
+    /// file cannot be read or contains corrupt JSON.
+    pub fn load_from(path: &Path) -> Result<Option<Self>, String> {
+        match std::fs::read_to_string(path) {
+            Ok(data) => serde_json::from_str(&data)
+                .map(Some)
+                .map_err(|e| format!("parse active config: {}", e)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("read active config: {}", e)),
+        }
     }
 
     pub fn save(&self) -> Result<(), String> {
         let dir = crate::profile::ensure_profiles_dir()
             .map_err(|e| format!("ensure profiles dir: {}", e))?;
-        let path = dir.join(".config.json");
+        self.save_to(&dir.join(".config.json"))
+    }
+
+    /// Save this record to an explicit path, creating parent directories as needed.
+    pub fn save_to(&self, path: &Path) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("ensure active config dir: {}", e))?;
+        }
         let data =
             serde_json::to_string_pretty(self).map_err(|e| format!("serialize active: {}", e))?;
         std::fs::write(path, data).map_err(|e| format!("write active: {}", e))
@@ -75,7 +96,12 @@ impl ActiveConfig {
     /// Clear the record so a reboot does not reapply. Removing the file
     /// is the unprotected state; a missing file is not an error.
     pub fn clear() -> Result<(), String> {
-        match std::fs::remove_file(Self::path()) {
+        Self::clear_at(&Self::path())
+    }
+
+    /// Clear an active-profile record at an explicit path. Missing files succeed.
+    pub fn clear_at(path: &Path) -> Result<(), String> {
+        match std::fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(format!("remove active: {}", e)),
@@ -132,5 +158,56 @@ mod tests {
         let json = serde_json::to_string(&c).unwrap();
         let back: ActiveConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(c, back);
+    }
+
+    #[test]
+    fn save_load_and_clear_round_trip() {
+        let dir = std::env::temp_dir().join(format!(
+            "phantom-active-rt-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let path = dir.join(".config.json");
+
+        assert_eq!(ActiveConfig::load_from(&path).unwrap(), None);
+
+        let cfg = ActiveConfig::for_applied("roundtrip", &[Layer::Kernel, Layer::Userland]);
+        cfg.save_to(&path).unwrap();
+        let loaded = ActiveConfig::load_from(&path).unwrap();
+        assert_eq!(loaded, Some(cfg));
+
+        ActiveConfig::clear_at(&path).unwrap();
+        assert_eq!(ActiveConfig::load_from(&path).unwrap(), None);
+        // Clearing an already-absent file is idempotent.
+        ActiveConfig::clear_at(&path).unwrap();
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_from_corrupt_json_returns_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "phantom-active-corrupt-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".config.json");
+        std::fs::write(&path, "{not valid json").unwrap();
+
+        let err = ActiveConfig::load_from(&path).unwrap_err();
+        assert!(
+            err.contains("parse active config"),
+            "unexpected error: {}",
+            err
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

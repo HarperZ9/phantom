@@ -209,7 +209,9 @@ extern "system" fn service_ctrl_handler(
 extern "system" fn service_main(_argc: u32, _argv: *mut *mut u8) {
     use std::ffi::CString;
 
-    let name = CString::new(SERVICE_NAME).unwrap();
+    let Ok(name) = CString::new(SERVICE_NAME) else {
+        return;
+    };
 
     unsafe {
         SERVICE_STATUS_HANDLE = RegisterServiceCtrlHandlerExA(
@@ -276,7 +278,9 @@ fn report_service_status(state: u32, wait_hint: u32) {
 fn run_windows_service() {
     use std::ffi::CString;
 
-    let name = CString::new(SERVICE_NAME).unwrap();
+    let Ok(name) = CString::new(SERVICE_NAME) else {
+        return;
+    };
 
     let table = [
         ServiceTableEntry {
@@ -317,9 +321,27 @@ fn install_windows_service() {
         std::process::exit(1);
     }
 
-    let svc_name = CString::new(SERVICE_NAME).unwrap();
-    let display_name = CString::new(SERVICE_DISPLAY_NAME).unwrap();
-    let bin_path = CString::new(exe_path.as_str()).unwrap();
+    let Ok(svc_name) = CString::new(SERVICE_NAME) else {
+        eprintln!("Invalid service name.");
+        unsafe {
+            CloseServiceHandle(scm);
+        }
+        std::process::exit(1);
+    };
+    let Ok(display_name) = CString::new(SERVICE_DISPLAY_NAME) else {
+        eprintln!("Invalid service display name.");
+        unsafe {
+            CloseServiceHandle(scm);
+        }
+        std::process::exit(1);
+    };
+    let Ok(bin_path) = CString::new(exe_path.as_str()) else {
+        eprintln!("Executable path contains an interior NUL byte.");
+        unsafe {
+            CloseServiceHandle(scm);
+        }
+        std::process::exit(1);
+    };
 
     let svc = unsafe {
         CreateServiceA(
@@ -369,7 +391,13 @@ fn uninstall_windows_service() {
         std::process::exit(1);
     }
 
-    let svc_name = CString::new(SERVICE_NAME).unwrap();
+    let Ok(svc_name) = CString::new(SERVICE_NAME) else {
+        eprintln!("Invalid service name.");
+        unsafe {
+            CloseServiceHandle(scm);
+        }
+        std::process::exit(1);
+    };
     let svc = unsafe { OpenServiceA(scm, svc_name.as_ptr() as *const u8, DELETE) };
 
     if svc == 0 {
@@ -417,7 +445,11 @@ fn ctrlc_handler<F: Fn() + Send + 'static>(handler: F) -> Result<(), String> {
         0
     }
 
-    *HANDLER.lock().unwrap() = Some(Box::new(handler));
+    let mut guard = HANDLER
+        .lock()
+        .map_err(|_| "Failed to lock console ctrl handler".to_string())?;
+    *guard = Some(Box::new(handler));
+    drop(guard);
 
     let result = unsafe { SetConsoleCtrlHandler(Some(ctrl_handler), 1) };
     if result == 0 {

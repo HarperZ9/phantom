@@ -152,7 +152,8 @@ pub fn generate_license_key(
     raw[10..26].copy_from_slice(&machine.hash);
 
     let signing_key = license_signing_key();
-    let mut mac = HmacSha256::new_from_slice(&signing_key).unwrap();
+    let mut mac =
+        HmacSha256::new_from_slice(&signing_key).expect("HMAC-SHA256 accepts any key length");
     mac.update(&raw[..RAW_PAYLOAD_LEN]);
     let sig = mac.finalize().into_bytes();
     raw[RAW_PAYLOAD_LEN..].copy_from_slice(&sig);
@@ -175,7 +176,8 @@ pub fn validate_license_key(key_str: &str) -> Result<License, LicenseError> {
     }
 
     let signing_key = license_signing_key();
-    let mut mac = HmacSha256::new_from_slice(&signing_key).unwrap();
+    let mut mac =
+        HmacSha256::new_from_slice(&signing_key).expect("HMAC-SHA256 accepts any key length");
     mac.update(&raw[..RAW_PAYLOAD_LEN]);
     mac.verify_slice(&raw[RAW_PAYLOAD_LEN..])
         .map_err(|_| LicenseError::InvalidSignature)?;

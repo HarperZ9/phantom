@@ -81,7 +81,7 @@ pub fn format_driver_status(status: &DriverStatus) -> String {
 }
 
 /// Serialize a HardwareProfile into the packed binary format the kernel driver expects.
-fn serialize_kernel_profile(profile: &HardwareProfile) -> Result<Vec<u8>, String> {
+pub fn serialize_kernel_profile(profile: &HardwareProfile) -> Result<Vec<u8>, String> {
     let disk_count = profile.disks.len().min(MAX_DISKS);
     let nic_count = profile.network_adapters.len().min(MAX_NICS);
     let gpu_count = profile.gpus.len().min(MAX_GPUS);
@@ -294,6 +294,48 @@ mod tests {
         };
         assert_eq!(format_driver_status(&status), "Driver: not loaded");
     }
+
+    #[test]
+    fn kernel_profile_exact_packed_size_and_tpm_absent() {
+        let mut profile = generate_profile("drv-size-test", "test");
+        profile.tpm = None;
+        let blob = serialize_kernel_profile(&profile).unwrap();
+
+        let header = 7 * 4;
+        let disk_entry = 4 + MAX_SERIAL_LEN + 4 + MAX_MODEL_LEN + 4 + MAX_SERIAL_LEN + 4;
+        let nic_entry = 12;
+        let gpu_entry = 2 + 2 + 4 + MAX_MODEL_LEN + 4;
+        let tpm_entry = 4;
+        let display_entry = 10;
+        let expected_len = header
+            + MAX_DISKS * disk_entry
+            + MAX_NICS * nic_entry
+            + MAX_GPUS * gpu_entry
+            + tpm_entry
+            + MAX_DISPLAYS * display_entry;
+        assert_eq!(blob.len(), expected_len);
+
+        let has_tpm = u32::from_le_bytes([blob[20], blob[21], blob[22], blob[23]]);
+        assert_eq!(has_tpm, 0);
+    }
+
+    #[test]
+    fn kernel_profile_rejects_planted_invalid_hex_and_mac() {
+        let mut bad_mac = generate_profile("drv-bad-mac", "test");
+        bad_mac.network_adapters[0].permanent_mac = "ZZ:BB:CC:DD:EE:FF".into();
+        let err = serialize_kernel_profile(&bad_mac).unwrap_err();
+        assert!(err.contains("Invalid MAC octet"), "got: {}", err);
+
+        let mut bad_gpu = generate_profile("drv-bad-gpu", "test");
+        bad_gpu.gpus[0].vendor_id = "NOTHEX".into();
+        let err = serialize_kernel_profile(&bad_gpu).unwrap_err();
+        assert!(err.contains("Invalid vendor_id"), "got: {}", err);
+
+        let mut bad_display = generate_profile("drv-bad-disp", "test");
+        bad_display.displays[0].product_code = "GGGG".into();
+        let err = serialize_kernel_profile(&bad_display).unwrap_err();
+        assert!(err.contains("Invalid display product_code"), "got: {}", err);
+    }
 }
 
 // --- Windows-specific driver communication ---
@@ -412,7 +454,8 @@ fn open_driver_device() -> Result<isize, String> {
         ) -> isize;
     }
 
-    let path = CString::new(PHANTOM_DEVICE_PATH).unwrap();
+    let path = CString::new(PHANTOM_DEVICE_PATH)
+        .map_err(|e| format!("Invalid phantom driver device path: {}", e))?;
     let handle = unsafe {
         CreateFileA(
             path.as_ptr() as *const u8,

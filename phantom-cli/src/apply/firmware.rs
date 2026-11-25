@@ -291,8 +291,12 @@ fn read_secure_boot_state() -> SecureBootState {
         ) -> u32;
     }
 
-    let name = CString::new("SecureBoot").unwrap();
-    let guid = CString::new("{8be4df61-93ca-11d2-aa0d-00e098032b8c}").unwrap();
+    let Ok(name) = CString::new("SecureBoot") else {
+        return SecureBootState::Unknown;
+    };
+    let Ok(guid) = CString::new("{8be4df61-93ca-11d2-aa0d-00e098032b8c}") else {
+        return SecureBootState::Unknown;
+    };
     let mut value: u8 = 0;
 
     let result = unsafe {
@@ -467,7 +471,15 @@ fn enable_firmware_privilege() -> Result<(), String> {
         return Err("Failed to open process token".into());
     }
 
-    let priv_name = CString::new("SeSystemEnvironmentPrivilege").unwrap();
+    let priv_name = match CString::new("SeSystemEnvironmentPrivilege") {
+        Ok(name) => name,
+        Err(e) => {
+            unsafe {
+                CloseHandle(token_handle);
+            }
+            return Err(format!("Invalid firmware privilege name: {}", e));
+        }
+    };
     let mut luid: u64 = 0;
     let result = unsafe {
         LookupPrivilegeValueA(std::ptr::null(), priv_name.as_ptr() as *const u8, &mut luid)

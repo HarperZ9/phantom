@@ -198,25 +198,16 @@ fn cmd_inspect(path: &str, json: bool) {
     if json {
         Envelope::ok("inspect", payload).print();
     } else {
-        if !payload.marked {
+        let Some(mark) = prof.metadata.origin_mark.as_ref() else {
             println!("Profile has no origin_mark (unmarked / hand-authored / legacy).");
             return;
-        }
+        };
         println!("origin_mark:");
-        println!(
-            "  origin_fingerprint : {}",
-            payload.origin_fingerprint_hex.unwrap()
-        );
-        println!("  origin_tier        : {}", payload.origin_tier.unwrap());
-        println!(
-            "  issued_epoch_days  : {}",
-            payload.issued_epoch_days.unwrap()
-        );
-        println!(
-            "  profile_hash       : {}",
-            payload.profile_hash_hex.unwrap()
-        );
-        println!("  mac_hex            : {}", payload.mac_hex.unwrap());
+        println!("  origin_fingerprint : {}", mark.origin_fingerprint_hex);
+        println!("  origin_tier        : {}", mark.origin_tier);
+        println!("  issued_epoch_days  : {}", mark.issued_epoch_days);
+        println!("  profile_hash       : {}", mark.profile_hash_hex);
+        println!("  mac_hex            : {}", mark.mac_hex);
     }
 }
 
@@ -426,14 +417,12 @@ fn cmd_match(path: &str, key: &str, json: bool) {
     let mut hash = [0u8; 32];
     hash.copy_from_slice(&hasher.finalize());
 
-    let origin_fp = hex_16(&mark.origin_fingerprint_hex);
-    let mark_ok = origin_fp.is_some_and(|fp| {
+    let Some(origin_fp) = hex_16(&mark.origin_fingerprint_hex).filter(|fp| {
         matches!(
-            watermark::verify(&mark, &hash, &fp),
+            watermark::verify(&mark, &hash, fp),
             watermark::Verdict::Local | watermark::Verdict::Foreign { .. }
         )
-    });
-    if !mark_ok {
+    }) else {
         let p = MatchPayload {
             verdict: "INVALID_MARK",
             detail: "The profile's origin_mark does not verify (forged or tampered).".into(),
@@ -447,13 +436,12 @@ fn cmd_match(path: &str, key: &str, json: bool) {
             println!("INVALID_MARK: {}", p.detail);
         }
         std::process::exit(3);
-    }
+    };
 
     // The definitive comparison: does the profile's origin fingerprint
     // equal the machine hash embedded in the candidate license key?
     // The license key ITSELF is signed by the master and cannot be
     // forged, so this pairing is the tie-back.
-    let origin_fp = origin_fp.unwrap();
     if license.machine_hash == origin_fp {
         let p = MatchPayload {
             verdict: "MATCH",

@@ -189,7 +189,7 @@ fn cmd_issue(tier_str: &str, fp_hex: &str, expires_days: u32, json: bool) {
                 "expires_days": expires_days,
             }
         });
-        println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+        print_json(&payload);
     } else {
         println!("License issued.");
         println!();
@@ -214,15 +214,12 @@ fn cmd_issue(tier_str: &str, fp_hex: &str, expires_days: u32, json: bool) {
 fn cmd_serial_of(key: &str, json: bool) {
     let serial = license_serial_for(Some(key));
     if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
-                "ok": true,
-                "command": "serial-of",
-                "data": {"serial": serial}
-            }))
-            .unwrap()
-        );
+        let payload = serde_json::json!({
+            "ok": true,
+            "command": "serial-of",
+            "data": {"serial": serial}
+        });
+        print_json(&payload);
     } else {
         println!("{}", serial);
     }
@@ -256,7 +253,7 @@ fn cmd_decode(key: &str, json: bool) {
                         "is_expired": license.is_expired(),
                     }
                 });
-                println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+                print_json(&payload);
             } else {
                 println!("tier              : {}", license.tier);
                 println!("expires           : {}", expires);
@@ -361,7 +358,7 @@ fn cmd_verify_callback(path: &str, key: &str, json: bool) {
                 "payload_trip_count_high": payload.trip_count_high,
             }
         });
-        println!("{}", serde_json::to_string_pretty(&payload_json).unwrap());
+        print_json(&payload_json);
     } else {
         println!("verdict          : {}", verdict);
         println!("proof valid      : {}", proof_ok);
@@ -387,8 +384,18 @@ fn emit_error(json: bool, cmd: &'static str, msg: &str) {
             "command": cmd,
             "error": msg,
         });
-        println!("{}", serde_json::to_string_pretty(&payload).unwrap());
+        print_json(&payload);
     } else {
         eprintln!("error: {}", msg);
+    }
+}
+
+fn print_json(value: &serde_json::Value) {
+    match serde_json::to_string_pretty(value) {
+        Ok(rendered) => println!("{}", rendered),
+        Err(e) => {
+            eprintln!("error: failed to serialize JSON output: {}", e);
+            std::process::exit(1);
+        }
     }
 }

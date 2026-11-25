@@ -99,10 +99,13 @@ pub fn run(action: ProfileAction, json: bool) {
         },
 
         ProfileAction::Export { name } => match profile::load_profile(&name) {
-            Ok(prof) => {
-                let json = serde_json::to_string_pretty(&prof).unwrap();
-                println!("{}", json);
-            }
+            Ok(prof) => match serde_json::to_string_pretty(&prof) {
+                Ok(json) => println!("{}", json),
+                Err(e) => {
+                    eprintln!("  Error serializing profile '{}': {}", name, e);
+                    std::process::exit(1);
+                }
+            },
             Err(e) => {
                 eprintln!("  Error loading profile '{}': {}", name, e);
                 std::process::exit(1);
